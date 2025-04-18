@@ -150,7 +150,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
         if p.path == '/':
-            html = """
+            html = f"""
 <!DOCTYPE html><html lang='de'><head><meta charset='utf-8'><title>Flugtracker</title>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'/>
@@ -159,32 +159,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
 <script src='https://code.jquery.com/jquery-3.6.0.min.js'></script>
 <script src='https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js'></script>
 <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
-</head><body><div class='container'><h2>Flugtracker v""" + VERSION + """</h2>
+</head><body><div class='container'><h2>Flugtracker v{VERSION}</h2>
 <div id='map' style='height:400px;'></div>
 <table id='flugtable' class='table'><thead><tr><th>Call</th><th>Alt</th><th>Speed</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody></tbody></table>
 <a href='/log'>Log anzeigen</a></div>
 <script>
-var map=L.map('map').setView([""" + str(EDTW_LAT) + "," + str(EDTW_LON) + "],12);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+var map = L.map('map').setView([{EDTW_LAT}, {EDTW_LON}], 12);
+L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{attribution:'© OSM'}}).addTo(map);
 var platzrunde=[[48.2797,8.4276],[48.2693,8.4372],[48.2643,8.4497],[48.2766,8.4735],[48.3194,8.4271],[48.3067,8.3984],[48.2888,8.4186],[48.2803,8.4271],[48.2797,8.4276]];
-L.polygon(platzrunde,{color:'blue',weight:2,fill:false}).addTo(map);
+L.polygon(platzrunde,{{color:'blue',weight:2,fill:false}}).addTo(map);
 var layer=L.layerGroup().addTo(map);
-function reload(){
-fetch('/api/flights').then(r=>r.json()).then(data=>{
+function reload(){{
+fetch('/api/flights').then(r=>r.json()).then(data=>{{
 layer.clearLayers();
 let html='';
-data.forEach(a=>{
+data.forEach(a=>{{
 if(!a.lat||!a.lon)return;
 let col=a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';
-L.circleMarker([a.lat,a.lon],{radius:6,color:col}).bindPopup(a.callsign).addTo(layer);
+L.circleMarker([a.lat,a.lon],{{radius:6,color:col}}).bindPopup(a.callsign).addTo(layer);
 let t=new Date(a.timestamp*1000);
 html+="<tr><td>"+a.callsign+"</td><td>"+Math.round(a.baro_altitude)+"</td><td>"+Math.round(a.velocity || 0)+"</td><td>"+a.muster+"</td><td>"+t.toLocaleTimeString()+"</td><td>"+t.toLocaleDateString()+"</td></tr>";
-});
+}});
 $('#flugtable').DataTable().clear().destroy();
 $('#flugtable tbody').html(html);
 $('#flugtable').DataTable();
-});
-}
+}});
+}}
 reload();setInterval(reload,60000);
 </script></body></html>""".encode('utf-8')
             self.send_response(200)
