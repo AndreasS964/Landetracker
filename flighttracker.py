@@ -82,7 +82,7 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
 
-# --- Aircraft DB aktualisieren ---
+# --- Aircraft DB ---
 def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
@@ -112,18 +112,17 @@ def load_aircraft_db():
         logger.error(f"Fehler beim Einlesen der Musterliste: {e}")
     return db
 
-# --- Fetch Daten ---
+# --- Fetch & Cleanup ---
 def fetch_and_store():
     global aircraft_db
     while True:
         try:
-            response = requests.get(READSB_URL, timeout=5)
-            if response.status_code != 200:
-                logger.warning(f"readsb JSON nicht erreichbar: Status {response.status_code}")
+            r = requests.get(READSB_URL, timeout=5)
+            if r.status_code != 200:
+                logger.warning(f"readsb JSON nicht erreichbar: Status {r.status_code}")
                 time.sleep(FETCH_INTERVAL)
                 continue
-
-            data = response.json()
+            data = r.json()
             ts = int(time.time())
             rows = []
             for ac in data.get('aircraft', []):
@@ -142,7 +141,6 @@ def fetch_and_store():
             logger.error(f"Fehler bei fetch_and_store: {e}")
         time.sleep(FETCH_INTERVAL)
 
-# --- Cleanup ---
 def cleanup_old_data():
     while True:
         try:
@@ -155,13 +153,69 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Webserver Dummy (Test) ---
+# --- Webserver mit Platzrunde, Map, Tabelle, API ---
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"Flugtracker v1.7 - laeuft")
+        p = urlparse(self.path)
+        if p.path == '/':
+            html = f"""<!DOCTYPE html><html lang='de'><head><meta charset='utf-8'><title>Flugtracker</title>
+            <meta name='viewport' content='width=device-width, initial-scale=1'>
+            <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'/>
+            <link rel='stylesheet' href='https://cdn.datatables.net/1.10.24/css/jquery.dataTables.min.css'/>
+            <link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'/>
+            <script src='https://code.jquery.com/jquery-3.6.0.min.js'></script>
+            <script src='https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js'></script>
+            <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script></head>
+            <body><div class='container'><h2>Flugtracker v{VERSION}</h2>
+            <div id='map' style='height:400px;'></div>
+            <table id='flugtable' class='table'><thead><tr><th>Call</th><th>Alt</th><th>Speed</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody></tbody></table>
+            <a href='/log'>Log anzeigen</a></div>
+            <script>
+              var map=L.map('map').setView([{EDTW_LAT},{EDTW_LON}],12);
+              L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{attribution:'© OSM'}}).addTo(map);
+              var platzrunde=[[48.2797,8.4276],[48.2693,8.4372],[48.2643,8.4497],[48.2766,8.4735],[48.3194,8.4271],[48.3067,8.3984],[48.2888,8.4186],[48.2803,8.4271],[48.2797,8.4276]];
+              L.polygon(platzrunde,{{color:'blue',weight:2,fill:false}}).addTo(map);
+              var layer=L.layerGroup().addTo(map);
+              function reload(){{
+                fetch('/api/flights').then(r=>r.json()).then(data=>{{
+                  layer.clearLayers();
+                  let html='';
+                  data.forEach(a=>{{
+                    if(!a.lat||!a.lon)return;
+                    let col=a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';
+                    L.circleMarker([a.lat,a.lon],{{radius:6,color:col}}).bindPopup(a.callsign).addTo(layer);
+                    let t=new Date(a.timestamp*1000);
+                    html+=`<tr><td>${a.callsign}</td><td>${Math.round(a.baro_altitude)}</td><td>${Math.round(a.velocity||0)}</td><td>${a.muster}</td><td>${t.toLocaleTimeString()}</td><td>${t.toLocaleDateString()}</td></tr>`;
+                  }});
+                  $('#flugtable').DataTable().clear().destroy();
+                  $('#flugtable tbody').html(html);
+                  $('#flugtable').DataTable();
+                }});
+              }}
+              reload();setInterval(reload,60000);
+            </script></body></html>""".encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type','text/html; charset=utf-8')
+            self.send_header('Content-Length',str(len(html)))
+            self.end_headers()
+            self.wfile.write(html)
+        elif p.path == '/log':
+            content = f"<html><head><meta charset='utf-8'></head><body><h3>Log</h3><pre>{'<br>'.join(log_lines[-50:])}</pre><a href='/'>Zurück</a></body></html>".encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type','text/html')
+            self.send_header('Content-Length',str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        elif p.path == '/api/flights':
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute('SELECT callsign, baro_altitude, velocity, timestamp, muster, lat, lon FROM flugdaten ORDER BY timestamp DESC LIMIT 100').fetchall()
+                js = json.dumps([dict(r) for r in rows], ensure_ascii=False).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type','application/json')
+            self.send_header('Content-Length',str(len(js)))
+            self.end_headers()
+            self.wfile.write(js)
 
 # --- Main ---
 if __name__ == '__main__':
