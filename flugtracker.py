@@ -147,9 +147,7 @@ MAIN_TEMPLATE = Template(r"""
 <style>body{padding:20px;} table.dataTable tbody tr:hover{background:#f0f0f0;} .low{color:green;} .mid{color:orange;} .high{color:red;}</style>
 </head><body>
 <div class=\"container\">
-<div class="alert alert-info p-2 mb-3" id="infobox" style="font-size: small;">
-  Lade Flugzeugdaten …
-</div>
+<div class=\"alert alert-info p-2 mb-3\" id=\"infobox\" style=\"font-size: small;\">Lade Flugzeugdaten …</div>
 <h3 class=\"mb-3\">Flugtracker EDTW – Version $version</h3>
 <div class=\"mb-3\">
   <a href=\"/log\" class=\"btn btn-secondary btn-sm\">Log</a>
@@ -187,7 +185,7 @@ MAIN_TEMPLATE = Template(r"""
 <p class=\"text-muted small\">© Andreas Sika – Version $version</p>
 </div>
 <script>
-$(document).ready(function() { $('#flugtable').DataTable(); });
+$$(document).ready(function() { $$('#flugtable').DataTable(); });
 setInterval(function() { location.reload(); }, 60000);
 var map = L.map('map').setView([$lat, $lon], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -207,15 +205,14 @@ fetch('/api/flights')
         radius: 6,
         color: color,
         fillOpacity: 0.8
-      }).bindPopup(`${ac.callsign}<br>${ac.baro_altitude} ft`);
+      }).bindPopup(`$$\{ac.callsign\}<br>$$\{ac.baro_altitude\} ft`);
       aircraftLayer.addLayer(marker);
     });
-    document.getElementById('infobox').textContent = `Angezeigt: ${data.length} Flugzeuge (${new Date().toLocaleTimeString()})`;
-    });
+    document.getElementById('infobox').textContent = `Angezeigt: $${data.length} Flugzeuge ($${new Date().toLocaleTimeString()})`;
   });
 </script>
 </body></html>
-""")
+""" )
 
 LOG_TEMPLATE = Template("""
 <!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Log</title></head><body>
@@ -376,4 +373,3 @@ if __name__ == '__main__':
             print("\n[INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
-
