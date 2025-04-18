@@ -357,6 +357,10 @@ if __name__ == '__main__':
 [INFO] Beende Flugtracker sauber...")
             httpd.server_close()
             sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] Serverfehler: {e}")
+            httpd.server_close()
+            sys.exit(1)
         except KeyboardInterrupt:
             print("
 [INFO] Beende Server...")
