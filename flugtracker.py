@@ -353,8 +353,7 @@ if __name__ == '__main__':
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("
-[INFO] Beende Flugtracker sauber...")
+            print("[INFO] Beende Flugtracker sauber...")
             httpd.server_close()
             sys.exit(0)
         except Exception as e:
@@ -362,18 +361,15 @@ if __name__ == '__main__':
             httpd.server_close()
             sys.exit(1)
         except KeyboardInterrupt:
-            print("
-[INFO] Beende Server...")
+            print("[INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
         except KeyboardInterrupt:
-            print("
-[INFO] Beende Server...")
+            print("[INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
         except KeyboardInterrupt:
-            print("
-[INFO] Beende Server...")
+            print("[INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
         except KeyboardInterrupt:
