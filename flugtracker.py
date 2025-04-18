@@ -162,8 +162,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
   <div id='infobox' class='alert alert-info p-2 mb-3'>Lade Flugzeugdaten …</div>
   <img src='http://www.lsv-schwarzwald.de/wp-content/uploads/2013/04/lsv_logo.gif' style='height:40px;vertical-align:middle;margin-right:20px;'>
   <span style='font-size:20px;font-weight:bold;'>Flugtracker EDTW – Version {VERSION}</span>
-  <div style='margin:10px 0;'><a href='/log'>Log</a> <a href='/stats'>Stats</a> <a href='/reset'>Reset DB</a></div>
-  <div style='margin:10px 0;'><a href='/tar1090' target='_blank'>tar1090</a> <a href='/graphs1090' target='_blank'>graphs1090</a></div>
+  <div style='margin:10px 0;'>
+    <a href='/log' class='btn btn-secondary btn-sm'>Log</a>
+    <a href='/stats' class='btn btn-secondary btn-sm'>Stats</a>
+    <a href='/reset' class='btn btn-danger btn-sm'>Reset DB</a>
+    <a href='/update_muster' class='btn btn-outline-info btn-sm'>Muster aktualisieren</a>
+    <a href='/fetch_opensky' class='btn btn-outline-info btn-sm'>Opensky abrufen</a>
+  </div>
+  <div style='margin:10px 0;'><a href='/tar1090' target='_blank' class='btn btn-outline-primary btn-sm'>tar1090</a> target='_blank'>tar1090</a> <a href='/graphs1090' target='_blank'>graphs1090</a></div>
   <form method='GET' action='/'><label>Radius(nm):<input name='radius' value='{rad}' type='number'></label> <label>Höhe:<select name='altfilter'><option value='all'{' selected' if altf=='all' else ''}>Alle</option><option value='3000'{' selected' if altf=='3000' else ''}><3000ft</option><option value='5000'{' selected' if altf=='5000' else ''}><5000ft</option></select></label> <label>Datum:<input name='date' type='date' value='{date}'></label> <button>Filter</button></form>
   <div id='map' style='height:400px;margin:10px 0;'></div>
   <table id='flugtable'><thead><tr><th>Call</th><th>Alt</th><th>Speed</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody>{rows_html}</tbody></table>
