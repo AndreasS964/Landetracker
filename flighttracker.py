@@ -185,7 +185,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     let col=a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';
                     L.circleMarker([a.lat,a.lon],{{radius:6,color:col}}).bindPopup(a.callsign).addTo(layer);
                     let t=new Date(a.timestamp*1000);
-                    html+=`<tr><td>${a.callsign}</td><td>${Math.round(a.baro_altitude)}</td><td>${Math.round(a.velocity||0)}</td><td>${a.muster}</td><td>${t.toLocaleTimeString()}</td><td>${t.toLocaleDateString()}</td></tr>`;
+                    html+=`<tr><td>${a.callsign}</td><td>${Math.round(a.baro_altitude)}</td><td>${Math.round(a.velocity || 0)}</td><td>${a.muster}</td><td>${t.toLocaleTimeString()}</td><td>${t.toLocaleDateString()}</td></tr>`;
                   }});
                   $('#flugtable').DataTable().clear().destroy();
                   $('#flugtable tbody').html(html);
