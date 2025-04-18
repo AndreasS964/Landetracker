@@ -13,8 +13,8 @@ cd ~
 rm -rf venv-tracker
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
-pip install --upgrade pip
-pip install pyModeS flask
+~/Landetracker/venv-tracker/bin/pip install --upgrade pip
+~/Landetracker/venv-tracker/bin/pip install pyModeS flask
 
 echo "📥 Landetracker Repo holen..."
 rm -rf Landetracker
