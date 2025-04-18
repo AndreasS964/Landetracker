@@ -348,13 +348,25 @@ if __name__ == '__main__':
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
     threading.Thread(target=fetch_and_store, daemon=True).start()
-    update_aircraft_db()
-    aircraft_db = load_aircraft_db()
-    init_db()
     print(f"[INFO] Starte Flugtracker v{VERSION} auf Port {PORT}...")
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         try:
             httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("
+[INFO] Beende Server...")
+            httpd.server_close()
+            sys.exit(0)
+        except KeyboardInterrupt:
+            print("
+[INFO] Beende Server...")
+            httpd.server_close()
+            sys.exit(0)
+        except KeyboardInterrupt:
+            print("
+[INFO] Beende Server...")
+            httpd.server_close()
+            sys.exit(0)
         except KeyboardInterrupt:
             print("\n[INFO] Beende Server...")
             httpd.server_close()
