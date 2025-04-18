@@ -32,19 +32,25 @@ log_lines = []
 
 class WebLogHandler(logging.Handler):
     def emit(self, record):
-        msg = self.format(record)
-        log_lines.append(msg)
-        if len(log_lines) > 1000:
-            log_lines.pop(0)
+        try:
+            msg = self.format(record)
+            log_lines.append(msg)
+            if len(log_lines) > 1000:
+                log_lines.pop(0)
+        except Exception:
+            pass
 
 logger = logging.getLogger("tracker")
 logger.setLevel(logging.INFO)
-fh = RotatingFileHandler("tracker.log", maxBytes=2_000_000, backupCount=3)
-fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-wh = WebLogHandler()
-wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.addHandler(fh)
-logger.addHandler(wh)
+logger.propagate = False
+
+if not logger.handlers:
+    fh = RotatingFileHandler("tracker.log", maxBytes=2_000_000, backupCount=3)
+    fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    wh = WebLogHandler()
+    wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(fh)
+    logger.addHandler(wh)
 
 # --- Haversine ---
 def haversine(lat1, lon1, lat2, lon2):
