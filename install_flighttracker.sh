@@ -4,21 +4,25 @@ set -e
 
 echo "📦 Starte vollständige Installation für Flighttracker v1.7"
 
-echo "🔧 Pakete installieren..."
+echo "🔧 Systempakete installieren..."
 sudo apt update
-sudo apt install -y git python3 python3-pip sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev
+sudo apt install -y git python3 python3-venv sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev curl
 
-echo "🐍 Python-Abhängigkeiten installieren..."
-pip3 install pyModeS flask
-
-echo "📥 Flighttracker herunterladen..."
+echo "🐍 Python-Venv vorbereiten..."
 cd ~
+rm -rf venv-tracker
+python3 -m venv venv-tracker
+source venv-tracker/bin/activate
+pip install --upgrade pip
+pip install pyModeS flask
+
+echo "📥 Landetracker Repo holen..."
 rm -rf Landetracker
 git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker
 
 echo "📁 Datenbank initialisieren..."
-python3 -c "import flighttracker; flighttracker.init_db()"
+venv-tracker/bin/python3 -c "import flighttracker; flighttracker.init_db()"
 
 echo "🛰 readsb neu bauen (Web & Beast-Modus)..."
 cd ~
@@ -40,9 +44,16 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart readsb
 
-echo "📡 Starte Flighttracker direkt..."
-cd ~/Landetracker
-nohup python3 flighttracker.py > tracker.out 2>&1 &
+echo "📊 tar1090 und graphs1090 installieren..."
+sudo bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/adsb-scripts/master/tar1090-install.sh)"
+sudo bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/adsb-scripts/master/graphs1090-install.sh)"
 
+echo "🚀 Starte Flighttracker (im Hintergrund)..."
+cd ~/Landetracker
+nohup ~/venv-tracker/bin/python3 flighttracker.py > tracker.out 2>&1 &
+
+echo ""
 echo "✅ Installation abgeschlossen!"
 echo "🌐 Webinterface unter: http://<PI-IP>:8083"
+echo "📊 tar1090: http://<PI-IP>/tar1090"
+echo "📈 graphs1090: http://<PI-IP>/graphs1090"
