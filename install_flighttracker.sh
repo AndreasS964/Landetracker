@@ -10,10 +10,8 @@ sudo apt install -y git python3 python3-venv sqlite3 rtl-sdr build-essential pkg
 
 echo "🐍 Python-Venv vorbereiten..."
 python3 -m venv ~/Landetracker/venv-tracker
-source ~/Landetracker/venv-tracker/bin/activate
-pip install --break-system-packages --upgrade pip
-pip install --break-system-packages pyModeS flask
-deactivate
+~/Landetracker/venv-tracker/bin/pip install --break-system-packages --upgrade pip
+~/Landetracker/venv-tracker/bin/pip install --break-system-packages pyModeS flask
 
 echo "📥 Landetracker Repo holen..."
 cd ~
