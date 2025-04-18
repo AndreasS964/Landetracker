@@ -53,86 +53,7 @@ def update_aircraft_db():
                 if td:
                     w.writerow([td, m])
     except Exception as e:
-        print(f"[ERROR] Muster-Update fehlgeschlagen: {e}")
-
-def load_aircraft_db():
-    db = {}
-    try:
-        with open(AIRCRAFT_CSV, newline='', encoding='utf-8') as f:
-            for r in csv.DictReader(f):
-                db[r['icao']] = r['model']
-    except Exception as e:
-        print(f"[ERROR] Muster-Ladefehler: {e}")
-    return db
-
-# Configuration
-
-missing = set()
-aircraft_db = {}
-log_lines = []
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c * 0.539957  # km to NM
-
-def fetch_and_store():
-    readsb_url = 'http://127.0.0.1:8080/data.json'  # readsb JSON endpoint
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    while True:
-        try:
-            # readsb JSON auslesen (lokal)
-            r = requests.get(readsb_url, timeout=5)
-            data = r.json()
-            now = int(time.time())
-            rows = []
-            for ac in data.get('aircraft', []):
-                hexid = ac.get('hex')
-                cs = (ac.get('flight') or '').strip()
-                alt = ac.get('alt_baro')
-                vel = ac.get('gs')
-                lat = ac.get('lat')
-                lon = ac.get('lon')
-                td = ac.get('t') or ''
-                model = aircraft_db.get(td.strip(), '')
-                if not model and hexid and hexid not in missing:
-                    missing.add(hexid)
-                    open(MISSING_LOG, 'a').write(f"{datetime.utcnow()} Missing {hexid}\\n")
-                    model = 'Unbekannt'
-                if None in (lat, lon, alt):
-                    continue
-                if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
-                    rows.append((hexid, cs, alt, vel, now, model, lat, lon))
-            r = requests.get('https://opensky-network.org/api/states/all', timeout=10)
-            if r.status_code != 200:
-                raise RuntimeError(f"API returned {r.status_code}")
-            d = r.json()
-            ts = d.get('time', int(time.time()))
-            st = d.get('states', [])
-            rows = []
-            for s in st:
-                hexid, cs = s[0], (s[1] or '').strip()
-                lat, lon, alt, vel = s[6], s[5], s[7], s[9]
-                td = s[8] or ''
-                model = aircraft_db.get(td.strip(), '')
-                if not model and hexid not in missing:
-                    missing.add(hexid)
-                    open(MISSING_LOG, 'a').write(f"{datetime.utcnow()} Missing {hexid}\\n")
-                    model = 'Unbekannt'
-                if None in (lat, lon, alt):
-                    continue
-                if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
-                    rows.append((hexid, cs, alt, vel, ts, model, lat, lon))
-            if rows:
-                cur.executemany('INSERT INTO flugdaten VALUES(?,?,?,?,?,?,?,?)', rows)
-                conn.commit()
-                log_lines.append(f"[{datetime.utcnow()}] {len(rows)} gespeichert")
+            log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")} gespeichert")
         except Exception as e:
             log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
         if rows:
@@ -360,7 +281,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header('Location', '/')
             self.end_headers()
-elif p.path == '/export.csv':
+        elif p.path == '/export.csv':
             self.export_csv()
         else:
             self.send_error(404)
