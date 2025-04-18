@@ -1,41 +1,116 @@
-# Flighttracker v1.7
+# ✈️ Flighttracker v1.7
 
-Ein lokaler Flugtracker für ADS-B-Daten auf Raspberry Pi mit Web-Frontend, Kartenansicht und SQLite-Datenbank.
+Ein lokaler ADS-B-Flugtracker mit Weboberfläche. Funktioniert ohne Internetzugang, basiert auf:
 
-## Features
+- 🛰 **readsb** (Beast TCP)
+- 🐍 **Python 3** (pyModeS, sqlite3, http.server)
+- 🌐 **Web-UI mit Leaflet**, Bootstrap & Karte
+- 📁 Speicherung in SQLite-Datenbank
+- 🗂 CSV-basierte Flugzeugdatenbank (ICAO → Muster)
 
-- Datenquelle: lokal (readsb) + optional OpenSky
-- Speicherung in SQLite inkl. Koordinaten
-- Web-Frontend mit Bootstrap + Leaflet
-- Platzrunde als Polygon eingeblendet (EDTW)
-- Filterbar nach Höhe, Datum, Radius
-- API-Endpoint mit Filteroptionen (`/api/flights`)
-- Datenexport als CSV/JSON (`/export`)
-- Live-Refresh alle 60 Sekunden
-- Logging in Datei mit Rotation
-- Automatischer Daten-Cleanup nach 180 Tagen
+---
 
-## Dateien
+## 📦 Voraussetzungen
 
-- `flighttracker.py` – Hauptprogramm
-- `platzrunde.gpx` – Platzrunde GPX-Datei
-- `aircraft_db.csv` – wird automatisch geladen
-- `tracker.log` – Logdatei
+- Raspberry Pi mit RTL-SDR Stick (z. B. NooElec)
+- Debian/Ubuntu Linux mit Python 3.9+
+- Internetzugang bei der ersten Installation (zum Download)
 
-## Start
+---
+
+## ⚙️ Installation (Einzeiler)
 
 ```bash
-python3 flighttracker.py
+wget https://raw.githubusercontent.com/AndreasS964/Landetracker/main/install_flighttracker.sh
+chmod +x install_flighttracker.sh
+./install_flighttracker.sh
 ```
 
-Weboberfläche erreichbar unter: [http://localhost:8083](http://localhost:8083)
+---
 
-## Voraussetzungen
+## 🌐 Webinterface
 
-- Python 3
-- `readsb` unter `http://127.0.0.1:8080/data.json`
-- Optional: `tar1090`, `graphs1090` lokal verfügbar
+Rufe im Browser auf:
+
+```
+http://<IP-des-Raspberry>:8083
+```
+
+---
+
+## 🔁 Datenquellen
+
+- ✅ Beast TCP Mode (Port 30005) über readsb
+- 🔄 Platzrunde wird per GPX-Datei (`platzrunde.gpx`) angezeigt
+- ❌ JSON-Fetch (Port 8080) ist deaktiviert
+
+---
+
+## 📂 Struktur
+
+```
+Landetracker/
+├── flighttracker.py       # Hauptanwendung
+├── flugdaten.db           # SQLite-Datenbank (automatisch)
+├── aircraft_db.csv        # Musterliste ICAO → Modell
+├── platzrunde.gpx         # Platzrunde als GPX-Track (optional)
+├── tracker.log            # Logging
+├── install_flighttracker.sh # Installer
+```
+
+---
+
+## 🔧 Manuelle Steuerung
+
+```bash
+# Tracker starten:
+python3 flighttracker.py
+
+# Tracker im Hintergrund starten:
+nohup python3 flighttracker.py &
+```
+
+---
+
+## 📤 Export / API (optional)
+
+Wird in v1.8 erweitert:
+- Export als CSV/JSON
+- REST-API mit Filterung
+- Live-Map mit Heading
+
+---
+
+## 🧼 Auto-Cleanup
+
+Daten älter als **180 Tage** werden automatisch gelöscht.
+
+---
+
+## 🧪 Test
+
+```bash
+curl http://127.0.0.1:8083
+```
+
+---
+
+## 🛠 Fehlerbehebung
+
+Falls keine Daten kommen:
+
+```bash
+sudo journalctl -u readsb -n 50
+```
+
+Prüfe, ob Beast TCP auf Port 30005 läuft:
+
+```bash
+sudo ss -tuln | grep 30005
+```
+
+---
 
 ## Lizenz
 
-MIT License
+MIT-Lizenz – frei nutzbar, auch für Vereine / Schulen.
