@@ -159,10 +159,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
 <script src='https://code.jquery.com/jquery-3.6.0.min.js'></script>
 <script src='https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js'></script>
 <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
-</head><body><div class='container'><h2>Flugtracker v{VERSION}</h2>
+</head><body><div class='container'>
+<div style='margin: 10px 0;'>
+  <img src='http://www.lsv-schwarzwald.de/wp-content/uploads/2013/04/lsv_logo.gif' style='height:40px;vertical-align:middle;margin-right:20px;'>
+  <span style='font-size:20px;font-weight:bold;'>Flugtracker EDTW – Version {VERSION}</span>
+</div>
+<div style='margin: 10px 0;'>
+  <a href='/log' class='btn btn-secondary btn-sm'>Log</a>
+  <a href='/stats' class='btn btn-info btn-sm'>Stats</a>
+  <a href='/reset' class='btn btn-danger btn-sm'>Reset DB</a>
+  <a href='/update_muster' class='btn btn-primary btn-sm'>Muster aktualisieren</a>
+  <a href='/fetch_opensky' class='btn btn-warning btn-sm'>Opensky abrufen</a>
+  <a href='/tar1090' class='btn btn-outline-primary btn-sm' target='_blank'>tar1090</a>
+  <a href='/graphs1090' class='btn btn-outline-secondary btn-sm' target='_blank'>graphs1090</a>
+</div>
 <div id='map' style='height:400px;'></div>
-<table id='flugtable' class='table'><thead><tr><th>Call</th><th>Alt</th><th>Speed</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody></tbody></table>
-<a href='/log'>Log anzeigen</a></div>
+<div class='table-responsive'><table id='flugtable' class='table table-striped table-bordered'>
+<thead><tr><th>Call</th><th>Alt</th><th>Speed</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody></tbody></table></div>
 <script>
 var map = L.map('map').setView([{EDTW_LAT}, {EDTW_LON}], 12);
 L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{attribution:'© OSM'}}).addTo(map);
@@ -182,16 +195,17 @@ html+="<tr><td>"+a.callsign+"</td><td>"+Math.round(a.baro_altitude)+"</td><td>"+
 }});
 $('#flugtable').DataTable().clear().destroy();
 $('#flugtable tbody').html(html);
-$('#flugtable').DataTable();
+$('#flugtable').DataTable({responsive:true,pageLength:25,order:[[4,'desc']]});
 }});
 }}
 reload();setInterval(reload,60000);
-</script></body></html>""".encode('utf-8')
+</script></div></body></html>""".encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Type','text/html; charset=utf-8')
             self.send_header('Content-Length',str(len(html)))
             self.end_headers()
             self.wfile.write(html)
+
         elif p.path == '/log':
             content = f"<html><head><meta charset='utf-8'></head><body><h3>Log</h3><pre>{'<br>'.join(log_lines[-50:])}</pre><a href='/'>Zurück</a></body></html>".encode('utf-8')
             self.send_response(200)
@@ -199,6 +213,7 @@ reload();setInterval(reload,60000);
             self.send_header('Content-Length',str(len(content)))
             self.end_headers()
             self.wfile.write(content)
+
         elif p.path == '/api/flights':
             with sqlite3.connect(DB_PATH) as conn:
                 conn.row_factory = sqlite3.Row
@@ -209,6 +224,57 @@ reload();setInterval(reload,60000);
             self.send_header('Content-Length',str(len(js)))
             self.end_headers()
             self.wfile.write(js)
+
+        elif p.path == '/stats':
+            with sqlite3.connect(DB_PATH) as conn:
+                cnt, last = conn.execute('SELECT COUNT(*), MAX(timestamp) FROM flugdaten').fetchone()
+            last_str = datetime.utcfromtimestamp(last).strftime('%Y-%m-%d %H:%M UTC') if last else '–'
+            content = f"<html><head><meta charset='utf-8'></head><body><h2>Stats</h2><p>Gespeicherte Flüge: {cnt}<br>Letzter Eintrag: {last_str}</p><a href='/'>Zurück</a></body></html>".encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type','text/html')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+
+        elif p.path == '/reset':
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute('DELETE FROM flugdaten')
+                conn.commit()
+            logger.warning("Alle Flugdaten wurden gelöscht.")
+            self.send_response(303)
+            self.send_header('Location','/')
+            self.end_headers()
+
+        elif p.path == '/update_muster':
+            update_aircraft_db()
+            global aircraft_db
+            aircraft_db = load_aircraft_db()
+            self.send_response(303)
+            self.send_header('Location','/')
+            self.end_headers()
+
+        elif p.path == '/fetch_opensky':
+            try:
+                r = requests.get('https://opensky-network.org/api/states/all', timeout=10)
+                d = r.json()
+                ts = int(time.time())
+                with sqlite3.connect(DB_PATH) as conn:
+                    cur = conn.cursor()
+                    for s in d.get('states', []):
+                        hexid, cs = s[0], (s[1] or '').strip()
+                        lat, lon, alt, vel = s[6], s[5], s[7], s[9]
+                        td = s[8] or ''
+                        if None in (lat, lon, alt): continue
+                        if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
+                            model = aircraft_db.get(td.strip(), 'Unbekannt')
+                            cur.execute('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', (hexid, cs, alt, vel, ts, model, lat, lon))
+                    conn.commit()
+                logger.info("Opensky-Daten erfolgreich abgerufen.")
+            except Exception as e:
+                logger.error(f"Fehler bei Opensky-Abruf: {e}")
+            self.send_response(303)
+            self.send_header('Location','/')
+            self.end_headers()
 
 if __name__ == '__main__':
     init_db()
