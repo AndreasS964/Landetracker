@@ -2,58 +2,63 @@
 
 set -e
 
-echo "📦 Starte vollständige Installation für Flighttracker v1.7"
+# Farben
+GRUEN='\033[0;32m'
+ROT='\033[0;31m'
+NC='\033[0m' # Keine Farbe
 
-echo "🔧 Systempakete installieren..."
+echo -e "${GRUEN}📦 Starte vollständige Installation für Flighttracker v1.7${NC}"
+
+# Systempakete
+echo -e "${GRUEN}🔧 Pakete installieren...${NC}"
 sudo apt update
-sudo apt install -y git python3 python3-venv sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev curl
+sudo apt install -y git python3 python3-full python3-venv python3-pip sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev curl
 
-echo "🐍 Python-Venv vorbereiten..."
-cd ~
-rm -rf venv-tracker
+# Python-Venv vorbereiten
+echo -e "${GRUEN}🐍 Python-Venv vorbereiten...${NC}"
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
-~/Landetracker/venv-tracker/bin/pip install --upgrade pip
-~/Landetracker/venv-tracker/bin/pip install pyModeS flask
+pip install --upgrade pip
+pip install pyModeS flask
 
-echo "📥 Landetracker Repo holen..."
+echo -e "${GRUEN}📥 Landetracker Repo holen...${NC}"
 rm -rf Landetracker
-git clone https://github.com/AndreasS964/Landetracker.git
+mkdir -p Landetracker
 cd Landetracker
+cp ../flighttracker.py .
+cp ../platzrunde.gpx . 2>/dev/null || true
 
-echo "📁 Datenbank initialisieren..."
-venv-tracker/bin/python3 -c "import flighttracker; flighttracker.init_db()"
+# SQLite-DB initialisieren
+echo -e "${GRUEN}📁 Datenbank initialisieren...${NC}"
+if [ ! -f tracker.db ]; then
+    echo "CREATE TABLE IF NOT EXISTS flights (icao TEXT, lat REAL, lon REAL, alt INTEGER, speed REAL, track REAL, seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP);" | sqlite3 tracker.db
+fi
 
-echo "🛰 readsb neu bauen (Web & Beast-Modus)..."
-cd ~
-rm -rf readsb
+# readsb installieren (ohne JSON-Port)
+echo -e "${GRUEN}🛠️ Installiere readsb (nur Beast-Port)...${NC}"
 git clone https://github.com/wiedehopf/readsb.git
 cd readsb
 make -j4
-sudo cp readsb /usr/bin/readsb
-sudo chmod +x /usr/bin/readsb
+sudo make install || true
+cd ..
 
-echo "⚙️ readsb systemd-Service konfigurieren..."
+# readsb systemd override
+echo -e "${GRUEN}⚙️ Konfiguriere readsb systemd-Service...${NC}"
 sudo mkdir -p /etc/systemd/system/readsb.service.d
 cat <<EOF | sudo tee /etc/systemd/system/readsb.service.d/override.conf > /dev/null
 [Service]
 ExecStart=
-ExecStart=/usr/bin/readsb --device-type rtlsdr --gain auto --ppm 0 --lat 48.2789 --lon 8.4293 --write-json /run/readsb --json-location-accuracy --net
+ExecStart=/usr/bin/readsb --device-type rtlsdr --gain auto --ppm 0 --lat 48.2789 --lon 8.4293 --write-json /run/readsb --quiet --net --beast --net-beast --net-beast-port 30005
 EOF
-
 sudo systemctl daemon-reload
 sudo systemctl restart readsb
 
-echo "📊 tar1090 und graphs1090 installieren..."
-sudo bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/adsb-scripts/master/tar1090-install.sh)"
-sudo bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/adsb-scripts/master/graphs1090-install.sh)"
+# tar1090 und graphs1090
+echo -e "${GRUEN}🌐 Installiere tar1090 und graphs1090...${NC}"
+bash <(wget -qO- https://github.com/wiedehopf/tar1090/raw/master/install.sh)
+bash <(wget -qO- https://github.com/wiedehopf/graphs1090/raw/master/install.sh)
 
-echo "🚀 Starte Flighttracker (im Hintergrund)..."
-cd ~/Landetracker
-nohup ~/venv-tracker/bin/python3 flighttracker.py > tracker.out 2>&1 &
-
-echo ""
-echo "✅ Installation abgeschlossen!"
-echo "🌐 Webinterface unter: http://<PI-IP>:8083"
-echo "📊 tar1090: http://<PI-IP>/tar1090"
-echo "📈 graphs1090: http://<PI-IP>/graphs1090"
+# Abschluss
+echo -e "${GRUEN}✅ Installation abgeschlossen.${NC}"
+echo -e "${GRUEN}📍 Tracker starten mit:${NC} source venv-tracker/bin/activate && python3 flighttracker.py"
+echo -e "${GRUEN}🌍 Aufruf im Browser:${NC} http://<raspi-ip>:8083"
