@@ -147,78 +147,67 @@ MAIN_TEMPLATE = Template(r"""
 <style>body{padding:20px;} table.dataTable tbody tr:hover{background:#f0f0f0;} .low{color:green;} .mid{color:orange;} .high{color:red;}</style>
 </head><body>
 <div class=\"container\">
-<div class=\"alert alert-info p-2 mb-3\" id=\"infobox\" style=\"font-size: small;\">Lade Flugzeugdaten …</div>
-<h3 class=\"mb-3\">Flugtracker EDTW – Version $version</h3>
-<div class=\"mb-3\">
-  <a href=\"/log\" class=\"btn btn-secondary btn-sm\">Log</a>
-  <a href=\"/stats\" class=\"btn btn-secondary btn-sm\">Statistik</a>
-  <a href=\"/reset\" class=\"btn btn-danger btn-sm\" onclick=\"return confirm('DB wirklich löschen?');\">DB zurücksetzen</a>
-  <a href=\"/tar1090\" class=\"btn btn-outline-primary btn-sm\" target=\"_blank\">tar1090</a>
-  <a href=\"/graphs1090\" class=\"btn btn-outline-primary btn-sm\" target=\"_blank\">graphs1090</a>
-  <a href=\"/export.csv\" class=\"btn btn-outline-secondary btn-sm\">CSV Export</a>
-  <a href=\"/update_muster\" class=\"btn btn-outline-info btn-sm\">Muster aktualisieren</a>
-</div>
-<form method=\"GET\" action=\"/\" class=\"row g-3\">
-  <div class=\"col-auto\">
-    <label class=\"form-label\">Radius (nm)</label>
-    <input type=\"number\" name=\"radius\" value=\"$radius\" class=\"form-control\">
+  <div class=\"alert alert-info p-2 mb-3\" id=\"infobox\" style=\"font-size: small;\">Lade Flugzeugdaten …</div>
+  <h3 class=\"mb-3\">Flugtracker EDTW – Version $version</h3>
+  <div class=\"mb-3\">
+    <a href=\"/log\" class=\"btn btn-secondary btn-sm\">Log</a>
+    <a href=\"/stats\" class=\"btn btn-secondary btn-sm\">Statistik</a>
+    <a href=\"/reset\" class=\"btn btn-danger btn-sm\" onclick=\"return confirm('DB wirklich löschen?');\">DB zurücksetzen</a>
+    <a href=\"/tar1090\" class=\"btn btn-outline-primary btn-sm\" target=\"_blank\">tar1090</a>
+    <a href=\"/graphs1090\" class=\"btn btn-outline-primary btn-sm\" target=\"_blank\">graphs1090</a>
+    <a href=\"/export.csv\" class=\"btn btn-outline-secondary btn-sm\">CSV Export</a>
+    <a href=\"/update_muster\" class=\"btn btn-outline-info btn-sm\">Muster aktualisieren</a>
   </div>
-  <div class=\"col-auto\">
-    <label class=\"form-label\">Höhenfilter</label>
-    <select name=\"altfilter\" class=\"form-select\">
-      <option value=\"all\" $altall>Alle</option>
-      <option value=\"3000\" $alt3000><3000ft</option>
-      <option value=\"5000\" $alt5000><5000ft</option>
-    </select>
-  </div>
-  <div class=\"col-auto\">
-    <label class=\"form-label\">Datum</label>
-    <input type=\"date\" name=\"date\" value=\"$date\" class=\"form-control\">
-  </div>
-  <div class=\"col-auto align-self-end\">
-    <button type=\"submit\" class=\"btn btn-primary\">Anzeigen</button>
-  </div>
-</form>
-<div id=\"map\" style=\"height:400px;margin-top:20px;\"></div>
-<table id=\"flugtable\" class=\"table table-striped\"><thead><tr>
-<th>Call</th><th>Höhe</th><th>Geschw.</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody>$rows</tbody></table>
-<p class=\"text-muted small\">© Andreas Sika – Version $version</p>
+  <form method=\"GET\" action=\"/\" class=\"row g-3\">
+    <div class=\"col-auto\">
+      <label class=\"form-label\">Radius (nm)</label>
+      <input type=\"number\" name=\"radius\" value=\"$radius\" class=\"form-control\">
+    </div>
+    <div class=\"col-auto\">
+      <label class=\"form-label\">Höhenfilter</label>
+      <select name=\"altfilter\" class=\"form-select\">
+        <option value=\"all\" $altall>Alle</option>
+        <option value=\"3000\" $alt3000><3000ft</option>
+        <option value=\"5000\" $alt5000><5000ft</option>
+      </select>
+    </div>
+    <div class=\"col-auto\">
+      <label class=\"form-label\">Datum</label>
+      <input type=\"date\" name=\"date\" value=\"$date\" class=\"form-control\">
+    </div>
+    <div class=\"col-auto align-self-end\">
+      <button type=\"submit\" class=\"btn btn-primary\">Anzeigen</button>
+    </div>
+  </form>
+  <div id=\"map\" style=\"height:400px;margin-top:20px;\"></div>
+  <table id=\"flugtable\" class=\"table table-striped\"><thead><tr>
+    <th>Call</th><th>Höhe</th><th>Geschw.</th><th>Muster</th><th>Zeit</th><th>Datum</th>
+  </tr></thead><tbody>$rows</tbody></table>
+  <p class=\"text-muted small\">© Andreas Sika – Version $version</p>
 </div>
 <script>
-$$(document).ready(function() { $$('#flugtable').DataTable(); });
+// Sicheres Escaping von $ in JS
+$$$(document).ready(function() { $$('#flugtable').DataTable(); });
 setInterval(function() { location.reload(); }, 60000);
 var map = L.map('map').setView([$lat, $lon], 11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap-Mitwirkende'
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap-Mitwirkende' }).addTo(map);
 var aircraftLayer = L.layerGroup().addTo(map);
 L.circle([$lat, $lon], {radius: $radius_m, color: 'blue'}).addTo(map);
 
-// Live-Flugzeugdaten von /api/flights holen und als Marker darstellen
-fetch('/api/flights')
-  .then(res => res.json())
-  .then(data => {
-    data.forEach(ac => {
-      if (!ac.baro_altitude || !ac.callsign) return;
-      let color = ac.baro_altitude < 3000 ? 'green' : ac.baro_altitude < 5000 ? 'orange' : 'red';
-      let marker = L.circleMarker([ac.lat, ac.lon], {
-        radius: 6,
-        color: color,
-        fillOpacity: 0.8
-      }).bindPopup(`$${ac.callsign}<br>$${ac.baro_altitude} ft`);
-      aircraftLayer.addLayer(marker);
-    });
-    document.getElementById('infobox').textContent = `Angezeigt: $${data.length} Flugzeuge ($${new Date().toLocaleTimeString()})`;
+fetch('/api/flights').then(res => res.json()).then(data => {
+  aircraftLayer.clearLayers();
+  data.forEach(ac => {
+    if (!ac.lat || !ac.lon) return;
+    let color = ac.baro_altitude < 3000 ? 'green' : ac.baro_altitude < 5000 ? 'orange' : 'red';
+    let marker = L.circleMarker([ac.lat, ac.lon], { radius: 6, color: color, fillOpacity: 0.8 })
+      .bindPopup(`$${ac.callsign}<br>$${ac.baro_altitude} ft`);
+    aircraftLayer.addLayer(marker);
   });
+  document.getElementById('infobox').textContent = `Angezeigt: $${data.length} Flugzeuge ($${new Date().toLocaleTimeString()})`;
+});
 </script>
 </body></html>
 """ )
-
-LOG_TEMPLATE = Template("""
-<!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Log</title></head><body>
-<h2>Log</h2><pre>$content</pre><a href="/">Zurück</a>
-</body></html>
-""")
 
 STATS_TEMPLATE = Template("""
 <!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Stats</title></head><body>
