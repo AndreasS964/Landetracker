@@ -376,3 +376,4 @@ if __name__ == '__main__':
             print("\n[INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
+
