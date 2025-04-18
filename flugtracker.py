@@ -52,8 +52,9 @@ def update_aircraft_db():
                 m = e.get('Model') or e.get('Name', '')
                 if td:
                     w.writerow([td, m])
+        log_lines.append(f"[{datetime.utcnow()}] Musterliste aktualisiert: {len(data)} Einträge")
     except Exception as e:
-        log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
+        log_lines.append(f"[{datetime.utcnow()}] Fehler beim Laden der Musterliste: {e}")
         except Exception as e:
             log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
         if rows:
