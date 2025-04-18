@@ -53,7 +53,7 @@ def update_aircraft_db():
                 if td:
                     w.writerow([td, m])
     except Exception as e:
-            log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
+        log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
         except Exception as e:
             log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
         if rows:
