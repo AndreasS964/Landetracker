@@ -6,6 +6,7 @@ import time
 import math
 from datetime import datetime
 import csv
+import json
 from urllib.parse import urlparse, parse_qs
 import html
 import threading
@@ -14,6 +15,53 @@ import sys
 import os
 from logging.handlers import RotatingFileHandler
 from string import Template
+
+# Datenbankinitialisierung
+
+def init_db():
+    if not os.path.exists(DB_PATH):
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('''CREATE TABLE flugdaten (
+            hex TEXT,
+            callsign TEXT,
+            baro_altitude REAL,
+            velocity REAL,
+            timestamp INTEGER,
+            muster TEXT
+        )''')
+        conn.commit()
+        conn.close()
+
+# Flugzeug-Musterdaten aktualisieren und laden
+
+AIRCRAFT_LIST_URL = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
+
+def update_aircraft_db():
+    try:
+        if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < DB_UPDATE_INTERVAL:
+            return
+        r = requests.get(AIRCRAFT_LIST_URL, timeout=30)
+        data = r.json()
+        with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
+            w = csv.writer(f)
+            w.writerow(['icao', 'model'])
+            for e in data:
+                td = e.get('ICAOTypeDesignator', '')
+                m = e.get('Model') or e.get('Name', '')
+                if td:
+                    w.writerow([td, m])
+    except Exception as e:
+        print(f"[ERROR] Muster-Update fehlgeschlagen: {e}")
+
+def load_aircraft_db():
+    db = {}
+    try:
+        with open(AIRCRAFT_CSV, newline='', encoding='utf-8') as f:
+            for r in csv.DictReader(f):
+                db[r['icao']] = r['model']
+    except Exception as e:
+        print(f"[ERROR] Muster-Ladefehler: {e}")
+    return db
 
 # Configuration
 PORT = 8083
@@ -29,7 +77,9 @@ WATCHDOG_INTERVAL = 10  # seconds
 DB_UPDATE_INTERVAL = 30 * 24 * 3600  # 30 days
 
 # HTML Template mit Bootstrap, Farben, Karte & Links zu tar1090/graphs1090
-MAIN_TEMPLATE = Template(r"""... (bleibt unverändert) ...""")
+MAIN_TEMPLATE = Template(r"""... (bleibt unverändert) ...
+<a href="/update_muster" class="btn btn-outline-info btn-sm">Muster aktualisieren</a>
+""")
 
 LOG_TEMPLATE = Template("""
 <!DOCTYPE html><html lang="de"><head><meta charset="utf-8"><title>Log</title></head><body>
@@ -98,6 +148,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def do_GET(self):
+        if self.path == '/api/flights':
+            con = sqlite3.connect(DB_PATH)
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            rows = cur.execute("SELECT callsign, baro_altitude, velocity, timestamp, muster FROM flugdaten ORDER BY timestamp DESC LIMIT 50").fetchall()
+            con.close()
+            result = [dict(r) for r in rows]
+            data = json.dumps(result, ensure_ascii=False)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data.encode('utf-8'))))
+            self.end_headers()
+            self.wfile.write(data.encode('utf-8'))
+            return
         p = urlparse(self.path)
         qs = parse_qs(p.query)
         if p.path == '/':
@@ -133,12 +197,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header('Location', '/')
             self.end_headers()
-        elif p.path == '/export.csv':
+        elif p.path == '/update_muster':
+            update_aircraft_db()
+            self.send_response(303)
+            self.send_header('Location', '/')
+            self.end_headers()
+elif p.path == '/export.csv':
             self.export_csv()
         else:
             self.send_error(404)
 
 if __name__ == '__main__':
+    update_aircraft_db()
+    aircraft_db = load_aircraft_db()
+    init_db()
     print(f"[INFO] Starte Flugtracker v{VERSION} auf Port {PORT}...")
     with socketserver.TCPServer(("", PORT), Handler) as httpd:
         try:
