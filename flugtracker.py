@@ -344,6 +344,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404)
 
 if __name__ == '__main__':
+    init_db()
+    update_aircraft_db()
+    aircraft_db = load_aircraft_db()
     threading.Thread(target=fetch_and_store, daemon=True).start()
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
