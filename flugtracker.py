@@ -153,6 +153,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 </head>
 <body>
 <div class='container'>
+  <img src="http://www.lsv-schwarzwald.de/wp-content/uploads/2013/04/lsv_logo.gif" style="height:40px;vertical-align:middle;margin-right:20px;">
+
   <h3>Flugtracker EDTW – Version {VERSION}</h3>
   <div><a href='/log'>Log</a> <a href='/stats'>Stats</a> <a href='/reset'>Reset DB</a></div>
   <div style='margin:10px 0;'><a href='/tar1090'>tar1090</a> <a href='/graphs1090'>graphs1090</a></div>
@@ -161,11 +163,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
   <table id='flugtable'><thead><tr><th>Call</th><th>Alt</th><th>Vel</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody>{rows_html}</tbody></table>
 </div>
 <script>
-$(document).ready(function(){{$(' #flugtable').DataTable();}});
-var map=L.map('map').setView([{EDTW_LAT},{EDTW_LON}],11);
-L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{attribution:'© OpenStreetMap'}}).addTo(map);
-var layer=L.layerGroup().addTo(map);
-fetch('/api/flights').then(r=>r.json()).then(data=>{{layer.clearLayers();data.forEach(a=>{{var col=a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';L.circleMarker([a.lat,a.lon],{{radius:6,color:col,fillOpacity:0.8}}).bindPopup(a.callsign).addTo(layer);}});}});
+  $(document).ready(function(){
+    $('#flugtable').DataTable();
+  });
+  var map = L.map('map').setView([{EDTW_LAT},{EDTW_LON}],11);
+  L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+  var layer = L.layerGroup().addTo(map);
+  fetch('/api/flights')
+    .then(r=>r.json())
+    .then(data=>{
+      layer.clearLayers();
+      data.forEach(a=>{
+        if (!a.lat || !a.lon) return;
+        var col = a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';
+        L.circleMarker([a.lat,a.lon],{radius:6,color:col,fillOpacity:0.8}).bindPopup(a.callsign).addTo(layer);
+      });
+      document.getElementById('infobox').textContent = `Angezeigt: ${data.length} Flugzeuge (${new Date().toLocaleTimeString()})`;
+    });
+  // Korrigiere tar1090 und graphs1090 Links auf Port 80
+  var host = window.location.hostname;
+  document.querySelector("a[href='/tar1090']").href = 'http://' + host + '/tar1090';
+  document.querySelector("a[href='/graphs1090']").href = 'http://' + host + '/graphs1090';
 </script>
 </body>
 </html>"""
