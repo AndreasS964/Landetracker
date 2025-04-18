@@ -54,16 +54,7 @@ def update_aircraft_db():
                     w.writerow([td, m])
         log_lines.append(f"[{datetime.utcnow()}] Musterliste aktualisiert: {len(data)} Einträge")
     except Exception as e:
-        log_lines.append(f"[{datetime.utcnow()}] Fehler beim Laden der Musterliste: {e}")
-        except Exception as e:
-            log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
-        if rows:
-                cur.executemany('INSERT INTO flugdaten VALUES(?,?,?,?,?,?,?,?)', rows)
-                conn.commit()
-                log_lines.append(f"[{datetime.utcnow()}] {len(rows)} von readsb gespeichert")
-        except Exception as e:
-            log_lines.append(f"[{datetime.utcnow()}] Fehler beim Abruf: {e}")
-        time.sleep(FETCH_INTERVAL)
+
 PORT = 8083
 DB_PATH = 'flugdaten.db'
 AIRCRAFT_CSV = 'aircraft_db.csv'
