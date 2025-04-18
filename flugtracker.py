@@ -354,6 +354,11 @@ if __name__ == '__main__':
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("
+[INFO] Beende Flugtracker sauber...")
+            httpd.server_close()
+            sys.exit(0)
+        except KeyboardInterrupt:
+            print("
 [INFO] Beende Server...")
             httpd.server_close()
             sys.exit(0)
