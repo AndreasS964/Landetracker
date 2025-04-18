@@ -65,8 +65,7 @@ def fetch_and_store():
                 model = aircraft_db.get(td.strip(), '')
                 if not model and hexid and hexid not in missing:
                     missing.add(hexid)
-                    open(MISSING_LOG, 'a').write(f"{datetime.utcnow()} Missing {hexid}
-")
+                    open(MISSING_LOG, 'a').write(f"{datetime.utcnow()} Missing {hexid}\\n")
                     model = 'Unbekannt'
                 if None in (lat, lon, alt):
                     continue
