@@ -26,7 +26,7 @@ VERSION = '1.7'
 FETCH_INTERVAL = 300
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
-READSB_URL = 'http://127.0.0.1:8080/data.json'
+READSB_URL = 'http://127.0.0.1:30053/data/aircraft.json'
 
 log_lines = []
 class WebLogHandler(logging.Handler):
@@ -82,16 +82,18 @@ def update_aircraft_db():
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
             return
         url = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
-        data = requests.get(url, timeout=30).json()
+        resp = requests.get(url, timeout=30)
+        data = resp.json()
+        entries = data.get('Aircraft', [])
         with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
             w.writerow(['icao', 'model'])
-            for e in data:
-                td = e.get('ICAOTypeDesignator','')
-                m = e.get('Model') or e.get('Name','')
+            for e in entries:
+                td = e.get('ICAOTypeDesignator', '')
+                m = e.get('Model') or e.get('Name', '')
                 if td:
                     w.writerow([td, m])
-        logger.info(f"Musterliste aktualisiert: {len(data)} Einträge")
+        logger.info(f"Musterliste aktualisiert: {len(entries)} Einträge")
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
