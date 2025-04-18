@@ -205,7 +205,7 @@ fetch('/api/flights')
         radius: 6,
         color: color,
         fillOpacity: 0.8
-      }).bindPopup(`$$\{ac.callsign\}<br>$$\{ac.baro_altitude\} ft`);
+      }).bindPopup(`$${ac.callsign}<br>$${ac.baro_altitude} ft`);
       aircraftLayer.addLayer(marker);
     });
     document.getElementById('infobox').textContent = `Angezeigt: $${data.length} Flugzeuge ($${new Date().toLocaleTimeString()})`;
