@@ -176,4 +176,3 @@ if __name__ == '__main__':
         logger.critical(f"HTTP-Server abgestürzt: {e}")
     finally:
         logger.info("Flugtracker beendet.")
-
