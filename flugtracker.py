@@ -163,17 +163,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
   <table id='flugtable'><thead><tr><th>Call</th><th>Alt</th><th>Vel</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody>{rows_html}</tbody></table>
 </div>
 <script>
-  $(document).ready(function(){
+  $$(document).ready(function(){{
     $('#flugtable').DataTable();
-  });
+  }});
   var map = L.map('map').setView([{EDTW_LAT},{EDTW_LON}],11);
   L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{attribution:'© OpenStreetMap'}).addTo(map);
   var layer = L.layerGroup().addTo(map);
-  fetch('/api/flights')
+  fetch('/api/flights').then(r=>r.json()).then(data=>{{
     .then(r=>r.json())
     .then(data=>{
       layer.clearLayers();
-      data.forEach(a=>{
+      data.forEach(a=>{{
         if (!a.lat || !a.lon) return;
         var col = a.baro_altitude<3000?'green':a.baro_altitude<5000?'orange':'red';
         L.circleMarker([a.lat,a.lon],{radius:6,color:col,fillOpacity:0.8}).bindPopup(a.callsign).addTo(layer);
