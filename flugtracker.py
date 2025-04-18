@@ -171,7 +171,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 <script>
 $(document).ready(function(){{ $('#flugtable').DataTable(); }});
 var map=L.map('map').setView([{MAP_CENTER_LAT},{MAP_CENTER_LON}],{MAP_ZOOM});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{{ attribution:'© OpenStreetMap-Mitwirkende' }}).addTo(map);
+L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{ attribution:'© OpenStreetMap-Mitwirkende' }}).addTo(map);
 // Platzrunde EDTW overlay
 var platzrundeCoords=[
   [48.2850,8.4220],[48.2850,8.4375],[48.2735,8.4375],[48.2735,8.4220]
