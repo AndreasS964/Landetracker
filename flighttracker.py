@@ -26,6 +26,7 @@ VERSION = '1.7'
 FETCH_INTERVAL = 300
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
+READSB_URL = 'http://127.0.0.1:8080/data.json'
 
 # --- Logging einrichten ---
 log_lines = []
@@ -116,7 +117,13 @@ def fetch_and_store():
     global aircraft_db
     while True:
         try:
-            data = requests.get('http://127.0.0.1:8080/data.json', timeout=5).json()
+            response = requests.get(READSB_URL, timeout=5)
+            if response.status_code != 200:
+                logger.warning(f"readsb JSON nicht erreichbar: Status {response.status_code}")
+                time.sleep(FETCH_INTERVAL)
+                continue
+
+            data = response.json()
             ts = int(time.time())
             rows = []
             for ac in data.get('aircraft', []):
@@ -148,11 +155,13 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Webserver ---
+# --- Webserver Dummy (Test) ---
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        # Code wie im vorherigen Canvas-Update (API, Export, Log, Startseite) bleibt vollständig erhalten
-        pass
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Flugtracker v1.7 - laeuft")
 
 # --- Main ---
 if __name__ == '__main__':
