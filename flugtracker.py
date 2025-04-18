@@ -50,6 +50,7 @@ MAIN_TEMPLATE = Template(r"""
   <a href="/reset" class="btn btn-danger btn-sm" onclick="return confirm('DB wirklich löschen?');">Datenbank zurücksetzen</a>
   <a href="/tar1090" class="btn btn-outline-primary btn-sm" target="_blank">tar1090</a>
   <a href="/graphs1090" class="btn btn-outline-primary btn-sm" target="_blank">graphs1090</a>
+  <a href="/export.csv" class="btn btn-outline-secondary btn-sm">Export CSV</a>
 </div>
 <form method="GET" action="/" class="row g-3">
   <div class="col-auto">
@@ -72,22 +73,20 @@ MAIN_TEMPLATE = Template(r"""
     <button type="submit" class="btn btn-primary">Anzeigen</button>
   </div>
 </form>
-<div id="map" style="height:300px;margin-top:20px;"></div>
+<div id="map" style="height:400px;margin-top:20px;"></div>
 <table id="flugtable" class="table table-striped"><thead><tr>
 <th>Call</th><th>Höhe</th><th>Geschw.</th><th>Muster</th><th>Zeit</th><th>Datum</th></tr></thead><tbody>$rows</tbody></table>
 <p class="text-muted small">© Andreas Sika – Version $version</p>
 </div>
 <script>
 $(document).ready(function() { $('#flugtable').DataTable(); });
+setInterval(function() { location.reload(); }, 60000);
 var map = L.map('map').setView([$lat, $lon], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap-Mitwirkende'
 }).addTo(map);
 L.circle([$lat, $lon], {radius: $radius_m, color: 'blue'}).addTo(map);
-
-// Optional: dynamischer Marker Layer für spätere Erweiterung vorbereiten
 var aircraftLayer = L.layerGroup().addTo(map);
-// Beispiel: aircraftLayer.clearLayers(); aircraftLayer.addLayer(...)
 </script>
 </body></html>
 """)
