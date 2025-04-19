@@ -2,106 +2,160 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Flugleiteransicht – Flugtracker</title>
+  <title>Flugtracker v1.9</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #f0f2f5; }
+    body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
+    header { background: #003366; color: white; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { margin: 0; font-size: 1.2em; }
+    header nav a { color: #fff; margin-left: 15px; text-decoration: none; }
     #map { height: 50vh; }
-    #controls { padding: 10px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.2); }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; background: #fff; }
-    th, td { padding: 6px 8px; border: 1px solid #ccc; }
+    #controls, #stats { padding: 10px; background: white; margin: 10px; border-radius: 5px; box-shadow: 0 0 3px rgba(0,0,0,0.2); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ccc; padding: 6px; font-size: 0.9em; }
     th { background: #eee; cursor: pointer; }
-    .topbar { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 5px 10px; border-radius: 6px; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
-    input, select { margin: 0 5px 5px 0; padding: 4px; }
+    input, select { margin-right: 10px; padding: 4px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div class="topbar">
-    <b>Flugleiteransicht</b> · <a href="/log" target="_blank">Log</a> · <a href="/tar1090" target="_blank">tar1090</a> · <a href="/graphs1090" target="_blank">graphs1090</a>
-  </div>
-  <div id="controls">
-    <label>Filter:</label>
-    <input type="text" id="callsign" placeholder="Callsign...">
-    <label>Höhe bis:</label>
-    <input type="number" id="max_alt" value="10000" style="width: 70px;"> ft
-    <label>Radius:</label>
-    <input type="number" id="radius" value="5" style="width: 50px;"> NM
-    <label>Letzte:</label>
-    <select id="minutes">
-      <option value="10">10 Min</option>
-      <option value="30" selected>30 Min</option>
-      <option value="60">60 Min</option>
-      <option value="180">3 Std</option>
-    </select>
+<header>
+  <h1>🛩️ Flugtracker v1.9 – Flugleiteransicht</h1>
+  <nav>
+    <a href="/log" target="_blank">Log</a>
+    <a href="/tar1090" target="_blank">tar1090</a>
+    <a href="/graphs1090" target="_blank">graphs1090</a>
+  </nav>
+</header>
+
+<div id="map"></div>
+
+<section id="controls">
+  <div class="row">
+    <label>Callsign:</label><input type="text" id="cs">
+    <label>Höhe &lt;=</label><input type="number" id="max_alt" value="10000" style="width:70px;"> ft
+    <label>Radius:</label><input type="number" id="radius" value="5" style="width:50px;"> NM
+    <label>Von:</label><input type="date" id="from">
+    <label>Bis:</label><input type="date" id="to">
     <button onclick="update()">🔄 Anzeigen</button>
+    <button onclick="fetchOpenSky()">🌐 OpenSky</button>
+    <button onclick="exportCSV()">📁 CSV</button>
   </div>
+</section>
+
+<section id="stats">
+  <h3>📊 Statistiken</h3>
+  <div id="stat-output">Wird geladen...</div>
+</section>
+
+<section id="flights">
   <table>
     <thead>
       <tr>
-        <th onclick="sort(0)">Callsign</th>
-        <th onclick="sort(1)">Höhe</th>
-        <th onclick="sort(2)">Lat</th>
-        <th onclick="sort(3)">Lon</th>
-        <th onclick="sort(4)">Zeit</th>
+        <th onclick="sortTable(0)">Callsign</th>
+        <th onclick="sortTable(1)">Höhe</th>
+        <th onclick="sortTable(2)">Speed</th>
+        <th onclick="sortTable(3)">Lat</th>
+        <th onclick="sortTable(4)">Lon</th>
+        <th onclick="sortTable(5)">Zeit</th>
       </tr>
     </thead>
-    <tbody id="tablebody"></tbody>
+    <tbody id="flights-table"></tbody>
   </table>
+</section>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([48.2789, 8.4293], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-    let markers = [];
+<script>
+const map = L.map('map').setView([48.2789, 8.4293], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+let markers = [];
 
-    function update() {
-      fetch('/flights.json')
-        .then(r => r.json())
-        .then(data => {
-          const callsignFilter = document.getElementById('callsign').value.toLowerCase();
-          const maxAlt = parseFloat(document.getElementById('max_alt').value) || 10000;
-          const radius = parseFloat(document.getElementById('radius').value) || 5;
-          const minutes = parseInt(document.getElementById('minutes').value) || 30;
-          const since = Date.now()/1000 - (minutes * 60);
+fetch('platzrunde.gpx')
+  .then(res => res.text())
+  .then(str => (new window.DOMParser()).parseFromString(str, "text/xml"))
+  .then(gpx => {
+    const geo = toGeoJSON.gpx(gpx);
+    const pline = L.geoJSON(geo, { color: "orange" }).addTo(map);
+    map.fitBounds(pline.getBounds());
+  });
 
-          markers.forEach(m => map.removeLayer(m));
-          markers = [];
-          const table = document.getElementById("tablebody");
-          table.innerHTML = '';
+function update() {
+  fetch('/flights.json')
+    .then(r => r.json())
+    .then(data => {
+      const csf = document.getElementById('cs').value.toLowerCase();
+      const alt = parseFloat(document.getElementById('max_alt').value) || 10000;
+      const rnm = parseFloat(document.getElementById('radius').value) || 5;
+      const from = document.getElementById('from').value;
+      const to = document.getElementById('to').value;
 
-          data.filter(f =>
-            (!callsignFilter || (f.cs || '').toLowerCase().includes(callsignFilter)) &&
-            (!f.alt || f.alt < maxAlt) &&
-            (!f.timestamp || f.timestamp > since)
-          ).forEach(f => {
-            const row = document.createElement('tr');
-            const time = f.timestamp ? new Date(f.timestamp * 1000).toLocaleTimeString() : '';
-            row.innerHTML = `<td>${f.cs || ''}</td><td>${f.alt || ''}</td><td>${f.lat.toFixed(4)}</td><td>${f.lon.toFixed(4)}</td><td>${time}</td>`;
-            table.appendChild(row);
+      const tbody = document.getElementById('flights-table');
+      tbody.innerHTML = '';
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
 
-            const marker = L.marker([f.lat, f.lon]).bindPopup(`${f.cs || ''}<br>${f.alt || '?'} ft`);
-            marker.addTo(map);
-            markers.push(marker);
-          });
-        });
-    }
+      const now = Date.now() / 1000;
+      let landungen = 0;
 
-    function sort(col) {
-      const tbody = document.getElementById('tablebody');
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      const asc = tbody.getAttribute('data-sort') != col;
-      rows.sort((a, b) => {
-        const ta = a.children[col].textContent;
-        const tb = b.children[col].textContent;
-        return asc ? ta.localeCompare(tb, undefined, {numeric: true}) : tb.localeCompare(ta, undefined, {numeric: true});
+      data.forEach(f => {
+        if (!f.cs || !f.lat || !f.lon) return;
+        if (f.cs.toLowerCase().indexOf(csf) === -1) return;
+        if (f.alt > alt) return;
+        if (from && new Date(f.timestamp * 1000).toISOString().split('T')[0] < from) return;
+        if (to && new Date(f.timestamp * 1000).toISOString().split('T')[0] > to) return;
+
+        landungen++;
+
+        const time = f.timestamp ? new Date(f.timestamp * 1000).toLocaleTimeString() : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${f.cs}</td><td>${f.alt || ''}</td><td>${f.vel || ''}</td><td>${f.lat.toFixed(4)}</td><td>${f.lon.toFixed(4)}</td><td>${time}</td>`;
+        tbody.appendChild(tr);
+
+        const m = L.circleMarker([f.lat, f.lon], { radius: 6, color: 'blue' })
+          .bindPopup(`${f.cs}<br>Höhe: ${f.alt || '?'} ft<br>Speed: ${f.vel || '?'} kt`);
+        m.addTo(map);
+        markers.push(m);
       });
-      rows.forEach(row => tbody.appendChild(row));
-      tbody.setAttribute('data-sort', asc ? col : '');
-    }
 
-    update();
-    setInterval(update, 15000);
-  </script>
+      document.getElementById('stat-output').innerHTML = `🔢 ${landungen} Flugbewegungen im Filterbereich`;
+    });
+}
+
+function exportCSV() {
+  const rows = [["Callsign", "Höhe", "Speed", "Lat", "Lon", "Zeit"]];
+  document.querySelectorAll("#flights-table tr").forEach(tr => {
+    const cells = [...tr.children].map(td => td.textContent);
+    rows.push(cells);
+  });
+  const csv = rows.map(r => r.join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "flugdaten.csv";
+  a.click();
+}
+
+function fetchOpenSky() {
+  alert('🔄 OpenSky-Abruf kommt in v2.0 oder via API – noch nicht aktiv.');
+}
+
+function sortTable(col) {
+  const tbody = document.getElementById('flights-table');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const asc = tbody.getAttribute('data-sort') != col;
+  rows.sort((a, b) => {
+    const ta = a.children[col].textContent;
+    const tb = b.children[col].textContent;
+    return asc ? ta.localeCompare(tb, undefined, {numeric: true}) : tb.localeCompare(ta, undefined, {numeric: true});
+  });
+  rows.forEach(r => tbody.appendChild(r));
+  tbody.setAttribute('data-sort', asc ? col : '');
+}
+
+update();
+setInterval(update, 20000);
+</script>
 </body>
 </html>
