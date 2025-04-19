@@ -80,20 +80,34 @@ def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
             return
+
         url = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
-        data = requests.get(url, timeout=30).json()
+        r = requests.get(url, timeout=30)
+        try:
+            data = r.json()
+        except Exception as e:
+            logger.error(f"Fehler beim Parsen der JSON-Antwort: {e} – Inhalt war: {r.text[:100]}")
+            return
+
+        valid = [e for e in data if e.get('ICAOTypeDesignator')]
+        if not valid:
+            logger.error("Keine gültigen ICAOTypeDesignator in JSON-Daten gefunden.")
+            return
+
         with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
             w.writerow(['icao', 'model'])
-            for e in data:
+            for e in valid:
                 td = e.get('ICAOTypeDesignator','')
                 m = e.get('Model') or e.get('Name','')
-                if td:
-                    w.writerow([td, m])
-        logger.info(f"Musterliste aktualisiert: {len(data)} Einträge")
+                w.writerow([td, m])
+
+        logger.info(f"Musterliste erfolgreich aktualisiert: {len(valid)} Einträge")
+
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
+# --- Aircraft DB laden ---
 def load_aircraft_db():
     db = {}
     try:
@@ -142,65 +156,49 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Main ---
-if __name__ == '__main__':
-    import mimetypes
-
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            if self.path == '/log':
-                log_html = '<br>'.join(str(line) for line in log_lines[-50:])
-                content = f'<html><head><meta charset=\"utf-8\"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href=\"/\">Zurück</a></body></html>'.encode('utf-8')
+# --- Webserver ---
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        p = urlparse(self.path)
+        if p.path == '/log':
+            log_html = '<br>'.join(str(line) for line in log_lines[-50:])
+            content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        elif self.path == '/' or self.path == '/index.html':
+            try:
+                with open("index.html", "rb") as f:
+                    content = f.read()
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self.send_header('Content-Length', str(len(content)))
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
-            elif self.path == '/' or self.path == '/index.html':
-                if not os.path.exists("index.html"):
-                    with open("index.html", "w", encoding="utf-8") as f:
-                        f.write("""<!DOCTYPE html>
-<html lang='de'>
-<head><meta charset='UTF-8'><title>Flugtracker</title>
-<link rel='stylesheet' href='https://unpkg.com/leaflet/dist/leaflet.css'/>
-<style>html,body{margin:0;padding:0;height:100%;}#map{height:100%;}</style>
-</head><body>
-<div id='map'></div>
-<script src='https://unpkg.com/leaflet/dist/leaflet.js'></script>
-<script>
-const map = L.map('map').setView([48.2789,8.4293],11);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
-fetch('/flights.json').then(r=>r.json()).then(data=>{
-data.forEach(f=>L.marker([f.lat,f.lon]).addTo(map).bindPopup(f.cs + '<br>' + f.alt + ' ft'));
-});</script></body></html>""")
-                try:
-                    with open("index.html", "rb") as f:
-                        content = f.read()
-                        self.send_response(200)
-                        self.send_header("Content-Type", mimetypes.guess_type("index.html")[0])
-                        self.send_header("Content-Length", str(len(content)))
-                        self.end_headers()
-                        self.wfile.write(content)
-                except FileNotFoundError:
-                    self.send_error(404, "index.html nicht gefunden")
-            elif self.path == '/flights.json':
-                try:
-                    cutoff = int(time.time()) - 300
-                    with sqlite3.connect(DB_PATH) as conn:
-                        rows = conn.execute("SELECT lat, lon, callsign, baro_altitude FROM flugdaten WHERE timestamp > ?", (cutoff,)).fetchall()
-                    data = [{"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3]} for r in rows if r[0] and r[1]]
-                    payload = json.dumps(data).encode('utf-8')
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(payload)))
-                    self.end_headers()
-                    self.wfile.write(payload)
-                except Exception as e:
-                    logger.error(f"Fehler bei /flights.json: {e}")
-                    self.send_error(500, "Fehler beim Abrufen der Flugdaten")
-            else:
-                self.send_error(404, "Nicht gefunden")
+            except FileNotFoundError:
+                self.send_error(404, "index.html nicht gefunden")
+        elif self.path == '/flights.json':
+            try:
+                cutoff = int(time.time()) - 3600
+                with sqlite3.connect(DB_PATH) as conn:
+                    rows = conn.execute("SELECT lat, lon, callsign, baro_altitude, velocity, timestamp FROM flugdaten WHERE timestamp > ?", (cutoff,)).fetchall()
+                data = [{"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3], "vel": r[4], "timestamp": r[5]} for r in rows if r[0] and r[1]]
+                payload = json.dumps(data).encode('utf-8')
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            except Exception as e:
+                logger.error(f"Fehler bei /flights.json: {e}")
+                self.send_error(500, "Fehler beim Abrufen der Flugdaten")
+        else:
+            self.send_error(404, "Nicht gefunden")
 
+# --- Main ---
+if __name__ == '__main__':
     init_db()
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
@@ -210,6 +208,7 @@ data.forEach(f=>L.marker([f.lat,f.lon]).addTo(map).bindPopup(f.cs + '<br>' + f.a
 
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
+
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
             httpd.serve_forever()
