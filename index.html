@@ -2,83 +2,106 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Flugtracker v1.7</title>
+  <title>Flugleiteransicht – Flugtracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
-    #map { height: 60%; }
-    #table-wrapper { padding: 1em; background: #f9f9f9; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 4px 8px; border: 1px solid #ccc; font-size: 0.9em; text-align: left; }
-    .controls { margin-bottom: 10px; }
-    .topbar {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: white;
-      padding: 6px 10px;
-      z-index: 1000;
-      border-radius: 5px;
-      box-shadow: 0 0 4px rgba(0,0,0,0.4);
-    }
+    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #f0f2f5; }
+    #map { height: 50vh; }
+    #controls { padding: 10px; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.2); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; background: #fff; }
+    th, td { padding: 6px 8px; border: 1px solid #ccc; }
+    th { background: #eee; cursor: pointer; }
+    .topbar { position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; padding: 5px 10px; border-radius: 6px; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
+    input, select { margin: 0 5px 5px 0; padding: 4px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="topbar">
-    ✈️ Flugtracker v1.7 | <a href="/log" target="_blank">Log anzeigen</a>
+    <b>Flugleiteransicht</b> · <a href="/log" target="_blank">Log</a> · <a href="/tar1090" target="_blank">tar1090</a> · <a href="/graphs1090" target="_blank">graphs1090</a>
   </div>
-  <div id="table-wrapper">
-    <div class="controls">
-      <label>Filter:</label>
-      <input type="text" id="search" placeholder="Callsign oder Höhe...">
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Callsign</th>
-          <th>Höhe [ft]</th>
-          <th>Lat</th>
-          <th>Lon</th>
-        </tr>
-      </thead>
-      <tbody id="flights-table"></tbody>
-    </table>
+  <div id="controls">
+    <label>Filter:</label>
+    <input type="text" id="callsign" placeholder="Callsign...">
+    <label>Höhe bis:</label>
+    <input type="number" id="max_alt" value="10000" style="width: 70px;"> ft
+    <label>Radius:</label>
+    <input type="number" id="radius" value="5" style="width: 50px;"> NM
+    <label>Letzte:</label>
+    <select id="minutes">
+      <option value="10">10 Min</option>
+      <option value="30" selected>30 Min</option>
+      <option value="60">60 Min</option>
+      <option value="180">3 Std</option>
+    </select>
+    <button onclick="update()">🔄 Anzeigen</button>
   </div>
+  <table>
+    <thead>
+      <tr>
+        <th onclick="sort(0)">Callsign</th>
+        <th onclick="sort(1)">Höhe</th>
+        <th onclick="sort(2)">Lat</th>
+        <th onclick="sort(3)">Lon</th>
+        <th onclick="sort(4)">Zeit</th>
+      </tr>
+    </thead>
+    <tbody id="tablebody"></tbody>
+  </table>
+
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     const map = L.map('map').setView([48.2789, 8.4293], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-
     let markers = [];
 
-    function updateData() {
-      fetch('/flights.json').then(r => r.json()).then(data => {
-        markers.forEach(m => map.removeLayer(m));
-        markers = [];
+    function update() {
+      fetch('/flights.json')
+        .then(r => r.json())
+        .then(data => {
+          const callsignFilter = document.getElementById('callsign').value.toLowerCase();
+          const maxAlt = parseFloat(document.getElementById('max_alt').value) || 10000;
+          const radius = parseFloat(document.getElementById('radius').value) || 5;
+          const minutes = parseInt(document.getElementById('minutes').value) || 30;
+          const since = Date.now()/1000 - (minutes * 60);
 
-        const tbody = document.getElementById('flights-table');
-        tbody.innerHTML = '';
-        const filter = document.getElementById('search').value.toLowerCase();
+          markers.forEach(m => map.removeLayer(m));
+          markers = [];
+          const table = document.getElementById("tablebody");
+          table.innerHTML = '';
 
-        data.forEach(f => {
-          const rowStr = `${f.cs} ${f.alt}`.toLowerCase();
-          if (!rowStr.includes(filter)) return;
+          data.filter(f =>
+            (!callsignFilter || (f.cs || '').toLowerCase().includes(callsignFilter)) &&
+            (!f.alt || f.alt < maxAlt) &&
+            (!f.timestamp || f.timestamp > since)
+          ).forEach(f => {
+            const row = document.createElement('tr');
+            const time = f.timestamp ? new Date(f.timestamp * 1000).toLocaleTimeString() : '';
+            row.innerHTML = `<td>${f.cs || ''}</td><td>${f.alt || ''}</td><td>${f.lat.toFixed(4)}</td><td>${f.lon.toFixed(4)}</td><td>${time}</td>`;
+            table.appendChild(row);
 
-          const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${f.cs}</td><td>${f.alt}</td><td>${f.lat.toFixed(4)}</td><td>${f.lon.toFixed(4)}</td>`;
-          tbody.appendChild(tr);
-
-          const marker = L.marker([f.lat, f.lon]).bindPopup(`${f.cs}<br>${f.alt} ft`);
-          marker.addTo(map);
-          markers.push(marker);
+            const marker = L.marker([f.lat, f.lon]).bindPopup(`${f.cs || ''}<br>${f.alt || '?'} ft`);
+            marker.addTo(map);
+            markers.push(marker);
+          });
         });
-      });
     }
 
-    setInterval(updateData, 15000);
-    document.getElementById('search').addEventListener('input', updateData);
-    updateData();
+    function sort(col) {
+      const tbody = document.getElementById('tablebody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const asc = tbody.getAttribute('data-sort') != col;
+      rows.sort((a, b) => {
+        const ta = a.children[col].textContent;
+        const tb = b.children[col].textContent;
+        return asc ? ta.localeCompare(tb, undefined, {numeric: true}) : tb.localeCompare(ta, undefined, {numeric: true});
+      });
+      rows.forEach(row => tbody.appendChild(row));
+      tbody.setAttribute('data-sort', asc ? col : '');
+    }
+
+    update();
+    setInterval(update, 15000);
   </script>
 </body>
 </html>
