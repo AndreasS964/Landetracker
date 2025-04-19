@@ -1,45 +1,46 @@
-# 🛩️ Flugtracker v1.9b – Andreas Sika
+# 🛩️ Flugtracker v1.9e – Andreas Sika
 
 ## 🔧 Funktionen
 
 - 📡 Empfängt Flugdaten über `readsb` oder OpenSky API
 - 💾 Speichert Flugdaten lokal in SQLite
-- 🗺️ Zeigt Live-Flugbewegungen in Leaflet-Karte
-- 📈 Tabellenansicht mit Filter- und Sortierfunktionen
+- 🗺️ Zeigt Flugbewegungen auf Leaflet-Karte
+- 📈 Tabelle mit Filter- und Sortierfunktionen
 - 🛬 Bewegungsart-Erkennung (Anflug / Abflug)
-- 🧭 Anzeige der Platzrunde (`platzrunde.gpx`)
-- 📊 Statistikseite: Landungen pro Tag
-- 📁 CSV-Export der angezeigten Flüge
-- 🌐 OpenSky-Abruf vorbereitet
-- 🔃 Manuelles Aktualisieren & Zeitfilter
-- 📌 Anzeige letzter 7 Tage (standard)
+- 🧭 Platzrunde über `platzrunde.gpx`
+- 📊 Statistiken: Landungen pro Tag (30 Tage)
+- 📁 CSV-Export der Tabelle
+- 🌐 OpenSky-Abruf (Platzhalter vorbereitet)
+- 🚀 Manueller Datenabruf mit „DB-Aktualisieren“-Button
+- ⏳ Zeitfilter mit Datum oder Dropdown
+- 🧭 Filter nach Callsign, Höhe, Radius, Bewegungsart
+- 📌 Zeigt standardmäßig letzte 7 Tage
 
 ## 📂 Dateien
 
-- `flighttracker.py` – Hauptserver, Datenverarbeitung und API
-- `index.html` – Weboberfläche (keine Flask, reines HTML/JS)
-- `platzrunde.gpx` – Platzrunde als GPX-Datei
-- `aircraft_db.csv` – Typendatenbank (wird automatisch geladen)
+- `flighttracker.py` – Hauptserver mit SQLite, REST, Logging
+- `index.html` – Weboberfläche (ohne Flask, rein HTML/JS)
+- `platzrunde.gpx` – Platzrundenpfad für Leaflet
+- `aircraft_db.csv` – Typenliste (automatischer Abruf)
 
-## 🧭 Bewegungsart-Logik (mode)
+## 🧭 Bewegungsart-Logik
 
-Jeder Flugdatenpunkt wird wie folgt bewertet:
+Jeder Flugdatensatz enthält:
 
-- **Anflug (`arrival`)**:  
-  Höhe < 2300 ft **und** Position < 1 NM vom Platz
+- `"arrival"` → Höhe < 2200 ft & Abstand < 3 NM
+- `"departure"` → Höhe > 3200 ft & Abstand < 3 NM
+- `""` → wenn nicht eindeutig
 
-- **Abflug (`departure`)**:  
-  Höhe > 3200 ft **und** Position < 1 NM vom Platz
+Frontend-Filterbar über Dropdown.
 
-→ Wird im Feld `mode` gespeichert und ist im Frontend filterbar.
+## 🖱️ Web-Oberfläche
 
-## 🖱️ Web-Buttons
-
-- 🔁 `Anzeigen`: Daten neu laden
-- ⏳ `Zeitraum`: Schnellfilter (Heute / 7 Tage etc.)
-- 🚁 `Bewegungsart`: Anflug / Abflug selektieren
-- 🌐 `OpenSky`: vorbereitet für API-Abruf
-- 📁 `CSV`: exportiert sichtbare Tabelle
+| Button              | Funktion                                      |
+|---------------------|-----------------------------------------------|
+| 🔄 Anzeigen         | Lädt und filtert Daten                        |
+| 📁 CSV              | Exportiert aktuelle Tabelle als CSV           |
+| 🌐 OpenSky          | Platzhalter (für geplante Anbindung)          |
+| 🚀 DB-Aktualisieren | Führt sofort Datenabruf via /refresh-now aus |
 
 ## ⚙️ Installation
 
@@ -53,5 +54,5 @@ python3 flighttracker.py
 
 ## 👤 Version
 
-**v1.9b** – entwickelt für Flugleiter & Platzüberwachung  
+**v1.9e** – entwickelt für Flugleiter und Platzüberwachung  
 **by Andreas Sika**
