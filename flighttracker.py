@@ -14,6 +14,10 @@ import sys
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+try:
+    from systemd.daemon import notify
+except ImportError:
+    def notify(msg): pass  # Fallback für Nicht-Systemd-Systeme
 
 # --- Konfiguration ---
 PORT = 8083
@@ -26,6 +30,7 @@ VERSION = '1.7'
 FETCH_INTERVAL = 300
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
+WATCHDOG_INTERVAL = 60
 
 # --- Logging einrichten ---
 log_lines = []
@@ -149,6 +154,12 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
+# --- Watchdog Pinger ---
+def watchdog_loop():
+    while True:
+        notify("WATCHDOG=1")
+        time.sleep(WATCHDOG_INTERVAL // 2)
+
 # --- Webserver ---
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -162,61 +173,52 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
         elif p.path == '/refresh-now':
-            fetch_and_store()
+            threading.Thread(target=fetch_and_store, daemon=True).start()
             self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b"OK")
-        elif p.path == '/stats':
+        elif p.path == '/flights.json':
+            params = parse_qs(p.query)
             try:
                 with sqlite3.connect(DB_PATH) as conn:
-                    result = conn.execute("SELECT date(timestamp, 'unixepoch', 'localtime') as day, COUNT(*) FROM flugdaten GROUP BY day ORDER BY day DESC LIMIT 30").fetchall()
-                stat_html = '<table border=1><tr><th>Tag</th><th>Landungen</th></tr>' + ''.join(f'<tr><td>{r[0]}</td><td>{r[1]}</td></tr>' for r in result) + '</table>'
-                content = f'<html><head><meta charset="utf-8"><title>Statistiken</title></head><body><h2>Letzte 30 Tage</h2>{stat_html}<br><a href="/">Zurück</a></body></html>'.encode('utf-8')
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html")
-                self.send_header("Content-Length", str(len(content)))
-                self.end_headers()
-                self.wfile.write(content)
+                    cur = conn.cursor()
+                    cur.execute("SELECT hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon FROM flugdaten ORDER BY timestamp DESC LIMIT 500")
+                    data = [dict(zip([col[0] for col in cur.description], row)) for row in cur.fetchall()]
+                    content = json.dumps(data).encode('utf-8')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
             except Exception as e:
-                logger.error(f"Fehler bei /stats: {e}")
-                self.send_error(500, "Fehler beim Abrufen der Statistik")
-        elif self.path == '/' or self.path == '/index.html':
+                self.send_error(500, f"Fehler beim Lesen der Flugdaten: {e}")
+        elif p.path == '/export.csv':
             try:
-                with open("index.html", "rb") as f:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT * FROM flugdaten ORDER BY timestamp DESC")
+                    rows = cur.fetchall()
+                    headers = [desc[0] for desc in cur.description]
+                    output = [','.join(headers)] + [','.join(map(str, row)) for row in rows]
+                    content = '\n'.join(output).encode('utf-8')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/csv')
+                    self.send_header('Content-Disposition', 'attachment; filename="flugdaten.csv"')
+                    self.send_header('Content-Length', str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
+            except Exception as e:
+                self.send_error(500, f"Fehler beim CSV-Export: {e}")
+        else:
+            try:
+                with open('index.html', 'rb') as f:
                     content = f.read()
                 self.send_response(200)
-                self.send_header("Content-Type", "text/html")
-                self.send_header("Content-Length", str(len(content)))
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
-            except FileNotFoundError:
-                self.send_error(404, "index.html nicht gefunden")
-        elif self.path == '/flights.json':
-            try:
-                cutoff = int(time.time()) - 7 * 86400
-                with sqlite3.connect(DB_PATH) as conn:
-                    rows = conn.execute("SELECT lat, lon, callsign, baro_altitude, velocity, timestamp FROM flugdaten WHERE timestamp > ?", (cutoff,)).fetchall()
-                data = []
-                for r in rows:
-                    if not r[0] or not r[1]: continue
-                    mode = ""
-                    if r[3] is not None and r[3] < 2200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 3:
-                        mode = "arrival"
-                    elif r[3] is not None and r[3] > 3200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 3:
-                        mode = "departure"
-                    data.append({"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3], "vel": r[4], "timestamp": r[5], "mode": mode})
-                payload = json.dumps(data).encode('utf-8')
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
             except Exception as e:
-                logger.error(f"Fehler bei /flights.json: {e}")
-                self.send_error(500, "Fehler beim Abrufen der Flugdaten")
-        else:
-            self.send_error(404, "Nicht gefunden")
+                self.send_error(404, f"index.html nicht gefunden: {e}")
 
 # --- Main ---
 if __name__ == '__main__':
@@ -225,6 +227,7 @@ if __name__ == '__main__':
     aircraft_db = load_aircraft_db()
     threading.Thread(target=cleanup_old_data, daemon=True).start()
     threading.Thread(target=fetch_and_store, daemon=True).start()
+    threading.Thread(target=watchdog_loop, daemon=True).start()
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
     try:
