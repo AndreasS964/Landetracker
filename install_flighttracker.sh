@@ -76,10 +76,10 @@ After=network.target
 WorkingDirectory=/home/pi/Landetracker
 ExecStart=/home/pi/Landetracker/venv-tracker/bin/python3 /home/pi/Landetracker/flighttracker.py
 Restart=always
+RestartSec=10
+WatchdogSec=60
 User=pi
-
-[Install]
-WantedBy=multi-user.target
+Type=simple
 EOF
 
 sudo systemctl daemon-reload
