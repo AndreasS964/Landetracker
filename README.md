@@ -7,9 +7,9 @@ Ein vollständiger ADS-B Flugtracker für Raspberry Pi – verarbeitet lokale Da
 ## ✨ Features
 - 📡 ADS-B Datenempfang via RTL-SDR
 - 🗃️ Lokale SQLite-Datenbank
-- 🧭 Weboberfläche mit Karte, Filter, Log
+- 🧭 Weboberfläche mit Leaflet-Karte, Filter, Live-Marker
 - 🔄 Live-Daten + Verlauf
-- 📤 Export: CSV & JSON
+- 📤 Export: JSON (Markeranzeige), CSV geplant
 - 🛩️ Platzrunde via GPX-Datei (optional)
 
 ---
@@ -40,20 +40,17 @@ source venv-tracker/bin/activate
 python3 flighttracker.py
 ```
 
-🔗 Öffne im Browser:  
-[http://<Raspi-IP>:8083](http://<Raspi-IP>:8083)
+📍 Öffne im Browser:  
+[http://<Raspi-IP>:8083](http://<Raspi-IP>:8083)  
+Zeigt automatisch die Leaflet-Karte mit Flugzeugen der letzten 5 Minuten.
 
 ---
 
-## 🗺️ Platzrunde anzeigen (optional)
-- Lege `platzrunde.gpx` ins Hauptverzeichnis.
-- Wird automatisch im Interface geladen.
-
----
-
-## 🔌 Datenquellen
-- readsb (lokal, Beast-Port 30005)
-- OpenSky Network (optional)
+## 📂 Dateien
+- `index.html`: Frontend (Karte, Marker, /log-Link)
+- `flighttracker.py`: Python-Backend mit HTTP-Server
+- `install_flighttracker.sh`: Komplettinstaller
+- `tracker.db`: SQLite-Datenbank (automatisch erstellt)
 
 ---
 
@@ -75,17 +72,7 @@ sudo systemctl restart readsb
 
 ---
 
-## 🛠️ Ausblick v1.8
-- Systemd-Service für Tracker
-- Platzrunde editierbar (GPX-Editor)
-- Performance-Optimierung
-- Exportfilter nach Zeitraum & ICAO
-
----
-
 ## 💬 Support
 👉 [GitHub Issues öffnen](https://github.com/AndreasS964/Landetracker/issues)
-
----
 
 © 2025 AndreasS964 · MIT-Lizenz

@@ -10,7 +10,7 @@ sudo apt install -y python3-full python3-venv python3-pip \
     sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev \
     curl libzstd-dev
 
-# Projektverzeichnis vorbereiten, nur wenn noch nicht drin
+# Projektverzeichnis vorbereiten
 if [ "$(basename "$PWD")" != "Landetracker" ]; then
     cd ~ || exit
     rm -rf Landetracker
@@ -23,11 +23,16 @@ echo "🐍 Python-Venv vorbereiten..."
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
 pip install --upgrade pip
-pip install pyModeS
+pip install pyModeS requests
+
+# index.html prüfen
+if [ ! -f index.html ]; then
+  echo "⚠️  index.html fehlt – bitte manuell ins Verzeichnis legen!"
+fi
 
 # Datenbank initialisieren
 echo "📁 Datenbank initialisieren..."
-[ ! -f tracker.db ] && sqlite3 tracker.db < init.sql
+[ ! -f tracker.db ] && sqlite3 tracker.db < init.sql 2>/dev/null || true
 
 # readsb installieren (nur Beast-Modus)
 echo "🛠️ Installiere readsb (nur Beast-Port)..."
