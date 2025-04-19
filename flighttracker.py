@@ -186,7 +186,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
 
-        if p.path == '/log':
+        if p.path == '/':
+            self.path = '/index.html'
+            return super().do_GET()
+
+        elif p.path == '/log':
             log_html = '<br>'.join(str(line) for line in log_lines[-50:])
             content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
             self.send_response(200)
