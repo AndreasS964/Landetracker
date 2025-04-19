@@ -2,12 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Flugtracker v1.9</title>
+  <title>Flugtracker v1.9b</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
   <style>
-    body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
+    body { margin: 0; font-family: sans-serif; background: #f3f3f3; }
     header { background: #003366; color: white; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
     header h1 { margin: 0; font-size: 1.2em; }
     header nav a { color: #fff; margin-left: 15px; text-decoration: none; }
@@ -22,9 +22,10 @@
 </head>
 <body>
 <header>
-  <h1>🛩️ Flugtracker v1.9 – Flugleiteransicht</h1>
+  <h1>🛩️ Flugtracker v1.9b</h1>
   <nav>
     <a href="/log" target="_blank">Log</a>
+    <a href="/stats" target="_blank">Statistiken</a>
     <a href="/tar1090" target="_blank">tar1090</a>
     <a href="/graphs1090" target="_blank">graphs1090</a>
   </nav>
@@ -39,15 +40,20 @@
     <label>Radius:</label><input type="number" id="radius" value="5" style="width:50px;"> NM
     <label>Von:</label><input type="date" id="from">
     <label>Bis:</label><input type="date" id="to">
+    <select id="preset" onchange="setDateRange(this.value)">
+      <option value="">⏳ Zeitraum</option>
+      <option value="1">Heute</option>
+      <option value="2">Gestern</option>
+      <option value="7">Letzte 7 Tage</option>
+      <option value="30">Letzte 30 Tage</option>
+    </select>
+    <select id="movement">
+      <option value="">🚁 Bewegungsart</option>
+      <option value="arrival">Anflug</option>
+      <option value="departure">Abflug</option>
+    </select>
     <button onclick="update()">🔄 Anzeigen</button>
-    <button onclick="fetchOpenSky()">🌐 OpenSky</button>
-    <button onclick="exportCSV()">📁 CSV</button>
   </div>
-</section>
-
-<section id="stats">
-  <h3>📊 Statistiken</h3>
-  <div id="stat-output">Wird geladen...</div>
 </section>
 
 <section id="flights">
@@ -80,13 +86,23 @@ fetch('platzrunde.gpx')
     map.fitBounds(pline.getBounds());
   });
 
+function setDateRange(val) {
+  const today = new Date();
+  const from = new Date(today);
+  if (val === "1") from.setDate(today.getDate());
+  if (val === "2") from.setDate(today.getDate() - 1);
+  if (val === "7") from.setDate(today.getDate() - 6);
+  if (val === "30") from.setDate(today.getDate() - 29);
+  document.getElementById("from").value = from.toISOString().split('T')[0];
+  document.getElementById("to").value = today.toISOString().split('T')[0];
+}
+
 function update() {
   fetch('/flights.json')
     .then(r => r.json())
     .then(data => {
       const csf = document.getElementById('cs').value.toLowerCase();
       const alt = parseFloat(document.getElementById('max_alt').value) || 10000;
-      const rnm = parseFloat(document.getElementById('radius').value) || 5;
       const from = document.getElementById('from').value;
       const to = document.getElementById('to').value;
 
@@ -96,7 +112,7 @@ function update() {
       markers = [];
 
       const now = Date.now() / 1000;
-      let landungen = 0;
+      let count = 0;
 
       data.forEach(f => {
         if (!f.cs || !f.lat || !f.lon) return;
@@ -105,7 +121,7 @@ function update() {
         if (from && new Date(f.timestamp * 1000).toISOString().split('T')[0] < from) return;
         if (to && new Date(f.timestamp * 1000).toISOString().split('T')[0] > to) return;
 
-        landungen++;
+        count++;
 
         const time = f.timestamp ? new Date(f.timestamp * 1000).toLocaleTimeString() : '';
         const tr = document.createElement('tr');
@@ -117,28 +133,7 @@ function update() {
         m.addTo(map);
         markers.push(m);
       });
-
-      document.getElementById('stat-output').innerHTML = `🔢 ${landungen} Flugbewegungen im Filterbereich`;
     });
-}
-
-function exportCSV() {
-  const rows = [["Callsign", "Höhe", "Speed", "Lat", "Lon", "Zeit"]];
-  document.querySelectorAll("#flights-table tr").forEach(tr => {
-    const cells = [...tr.children].map(td => td.textContent);
-    rows.push(cells);
-  });
-  const csv = rows.map(r => r.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "flugdaten.csv";
-  a.click();
-}
-
-function fetchOpenSky() {
-  alert('🔄 OpenSky-Abruf kommt in v2.0 oder via API – noch nicht aktiv.');
 }
 
 function sortTable(col) {
