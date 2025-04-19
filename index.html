@@ -6,38 +6,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
-    #map { height: 100%; }
-    #topbar {
-      position: absolute; top: 10px; left: 10px; z-index: 1000;
-      background: rgba(255,255,255,0.9); padding: 8px; border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    }
-    button { margin: 2px; padding: 6px 10px; font-size: 14px; }
+    #map { height: 70%; }
+    #controls { padding: 10px; background: #f0f0f0; }
     #footer {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      background: rgba(255,255,255,0.8); font-size: 12px;
+      background: #ddd; font-size: 12px;
       text-align: center; padding: 4px;
     }
+    button, select, input[type="date"] {
+      margin: 3px;
+      padding: 4px 8px;
+    }
+    table {
+      width: 100%; border-collapse: collapse; margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc; padding: 4px; text-align: left;
+    }
+    th { background: #eee; cursor: pointer; }
   </style>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/togeojson@0.16.0"></script>
 </head>
 <body>
-<div id="topbar">
-  <strong>Flugtracker v1.7</strong><br>
-  <button onclick="fetchFlights()">🔄 Daten aktualisieren</button>
-  <button onclick="fetchOpenSky()">🌐 OpenSky abrufen</button>
+<div id="controls">
+  <strong>Flugtracker v1.7</strong>
+  <button onclick="fetchFlights()">🔄 Aktualisieren</button>
+  <button onclick="fetchOpenSky()">🌐 OpenSky</button>
+  <button onclick="window.open('/export.csv')">📥 CSV Export</button>
+  <button onclick="window.open('/graphs1090')">📊 Graphs1090</button>
+  <button onclick="window.open('/tar1090')">🗺️ tar1090</button>
+  <br>
+  Filter: 
+  <label>von: <input type="date" id="fromDate"></label>
+  <label>bis: <input type="date" id="toDate"></label>
+  <label>Art: 
+    <select id="movementType">
+      <option value="all">alle</option>
+      <option value="arrival">Anflug</option>
+      <option value="departure">Abflug</option>
+    </select>
+  </label>
 </div>
 <div id="map"></div>
+<div id="tableWrap"><table id="flightTable"><thead><tr>
+<th onclick="sortTable(0)">Callsign</th>
+<th onclick="sortTable(1)">Typ</th>
+<th onclick="sortTable(2)">Höhe</th>
+<th onclick="sortTable(3)">Zeit</th>
+</tr></thead><tbody></tbody></table></div>
 <div id="footer">– Andreas Sika –</div>
 <script>
 let map = L.map('map').setView([48.2789, 8.4293], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 17,
-  attribution: '&copy; OpenStreetMap-Mitwirkende'
+  maxZoom: 17, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
-
 let flightLayer = L.layerGroup().addTo(map);
 
 function fetchFlights() {
@@ -45,10 +68,17 @@ function fetchFlights() {
     .then(r => r.json())
     .then(data => {
       flightLayer.clearLayers();
+      const tbody = document.querySelector('#flightTable tbody');
+      tbody.innerHTML = '';
       data.forEach(f => {
         let m = L.circleMarker([f.lat, f.lon], {radius: 5, color: 'red'})
           .bindPopup(`<b>${f.callsign || 'n/a'}</b><br>${f.muster}<br>${f.baro_altitude} ft<br>${new Date(f.timestamp*1000).toLocaleTimeString()}`);
         flightLayer.addLayer(m);
+        let row = tbody.insertRow();
+        row.insertCell().textContent = f.callsign || '';
+        row.insertCell().textContent = f.muster;
+        row.insertCell().textContent = f.baro_altitude;
+        row.insertCell().textContent = new Date(f.timestamp * 1000).toLocaleTimeString();
       });
     });
 }
@@ -69,6 +99,19 @@ function loadPlatzrunde() {
         dashArray: '4,2'
       }).addTo(map);
     }).catch(e => console.warn("Platzrunde nicht verfügbar", e));
+}
+
+function sortTable(n) {
+  let table = document.getElementById("flightTable");
+  let rows = Array.from(table.rows).slice(1);
+  let asc = table.dataset.sortdir !== 'asc';
+  rows.sort((a, b) => {
+    return asc
+      ? a.cells[n].innerText.localeCompare(b.cells[n].innerText)
+      : b.cells[n].innerText.localeCompare(a.cells[n].innerText);
+  });
+  rows.forEach(row => table.tBodies[0].appendChild(row));
+  table.dataset.sortdir = asc ? 'asc' : 'desc';
 }
 
 fetchFlights();

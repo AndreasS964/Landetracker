@@ -1,3 +1,4 @@
+# flighttracker.py (vollständig generiert)
 import http.server
 import socketserver
 import sqlite3
@@ -17,9 +18,8 @@ from logging.handlers import RotatingFileHandler
 try:
     from systemd.daemon import notify
 except ImportError:
-    def notify(msg): pass  # Fallback für Nicht-Systemd-Systeme
+    def notify(msg): pass
 
-# --- Konfiguration ---
 PORT = 8083
 DB_PATH = 'flugdaten.db'
 AIRCRAFT_CSV = 'aircraft_db.csv'
@@ -33,7 +33,6 @@ MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
 GPX_FILE = 'platzrunde.gpx'
 
-# --- Logging einrichten ---
 log_lines = []
 
 class WebLogHandler(logging.Handler):
@@ -52,7 +51,6 @@ wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(fh)
 logger.addHandler(wh)
 
-# --- Haversine ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -62,41 +60,25 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c * 0.539957
 
-# --- Init DB ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS flugdaten (
-                hex TEXT,
-                callsign TEXT,
-                baro_altitude REAL,
-                velocity REAL,
-                timestamp INTEGER,
-                muster TEXT,
-                lat REAL,
-                lon REAL
-            )
-        ''')
+                hex TEXT, callsign TEXT, baro_altitude REAL,
+                velocity REAL, timestamp INTEGER, muster TEXT,
+                lat REAL, lon REAL
+            )''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_time ON flugdaten(timestamp)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
 
-# --- Aircraft DB aktualisieren ---
 def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
             return
-        url = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
-        r = requests.get(url, timeout=30)
-        try:
-            data = r.json()
-        except Exception as e:
-            logger.error(f"Fehler beim Parsen der JSON-Antwort: {e} – Inhalt war: {r.text[:100]}")
-            return
+        r = requests.get('https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json', timeout=30)
+        data = r.json()
         valid = [e for e in data if e.get('ICAOTypeDesignator')]
-        if not valid:
-            logger.error("Keine gültigen ICAOTypeDesignator in JSON-Daten gefunden.")
-            return
         with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
             w.writerow(['icao', 'model'])
@@ -104,11 +86,10 @@ def update_aircraft_db():
                 td = e.get('ICAOTypeDesignator','')
                 m = e.get('Model') or e.get('Name','')
                 w.writerow([td, m])
-        logger.info(f"Musterliste erfolgreich aktualisiert: {len(valid)} Einträge")
+        logger.info(f"Musterliste aktualisiert: {len(valid)} Einträge")
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
-# --- Aircraft DB laden ---
 def load_aircraft_db():
     db = {}
     try:
@@ -120,7 +101,6 @@ def load_aircraft_db():
         logger.error(f"Fehler beim Einlesen der Musterliste: {e}")
     return db
 
-# --- Fetch Daten ---
 def fetch_and_store():
     global aircraft_db
     try:
@@ -142,7 +122,6 @@ def fetch_and_store():
     except Exception as e:
         logger.error(f"Fehler bei fetch_and_store: {e}")
 
-# --- Cleanup ---
 def cleanup_old_data():
     while True:
         try:
@@ -155,7 +134,6 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Platzrunde laden ---
 def load_platzrunde():
     try:
         with open(GPX_FILE, 'r', encoding='utf-8') as f:
@@ -164,13 +142,6 @@ def load_platzrunde():
         logger.warning(f"Platzrunde konnte nicht geladen werden: {e}")
         return ""
 
-# --- Watchdog Pinger ---
-def watchdog_loop():
-    while True:
-        notify("WATCHDOG=1")
-        time.sleep(WATCHDOG_INTERVAL // 2)
-
-# --- OpenSky Abruf ---
 def fetch_opensky():
     try:
         logger.info("OpenSky-Datenabruf gestartet...")
@@ -182,40 +153,37 @@ def fetch_opensky():
     except Exception as e:
         logger.error(f"Fehler beim OpenSky-Abruf: {e}")
 
+def watchdog_loop():
+    while True:
+        notify("WATCHDOG=1")
+        time.sleep(WATCHDOG_INTERVAL // 2)
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
-
         if p.path == '/log':
             log_html = '<br>'.join(str(line) for line in log_lines[-50:])
-            content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
+            content = f'<html><body><pre>{log_html}</pre></body></html>'.encode('utf-8')
             self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Type', 'text/html')
             self.send_header('Content-Length', str(len(content)))
             self.end_headers()
             self.wfile.write(content)
-
         elif p.path == '/refresh-now':
             threading.Thread(target=fetch_and_store, daemon=True).start()
             self.send_response(200)
             self.end_headers()
-
         elif p.path == '/fetch-opensky':
             threading.Thread(target=fetch_opensky, daemon=True).start()
             self.send_response(200)
             self.end_headers()
-
         elif p.path == '/platzrunde.gpx':
             content = load_platzrunde().encode('utf-8')
-            if content:
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/gpx+xml; charset=utf-8')
-                self.send_header('Content-Length', str(len(content)))
-                self.end_headers()
-                self.wfile.write(content)
-            else:
-                self.send_error(404, "Platzrunde nicht gefunden")
-
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/gpx+xml')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
         elif p.path == '/flights.json':
             try:
                 with sqlite3.connect(DB_PATH) as conn:
@@ -230,7 +198,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(content)
             except Exception as e:
                 self.send_error(500, f"Fehler beim Lesen der Flugdaten: {e}")
-
         elif p.path == '/export.csv':
             try:
                 with sqlite3.connect(DB_PATH) as conn:
@@ -239,8 +206,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     rows = cur.fetchall()
                     headers = [desc[0] for desc in cur.description]
                     output = [','.join(headers)] + [','.join(map(str, row)) for row in rows]
-                    content = '
-'.join(output).encode('utf-8')
+                    content = '\n'.join(output).encode('utf-8')
                     self.send_response(200)
                     self.send_header('Content-Type', 'text/csv')
                     self.send_header('Content-Disposition', 'attachment; filename=flugdaten.csv')
@@ -249,21 +215,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(content)
             except Exception as e:
                 self.send_error(500, f"Fehler beim CSV-Export: {e}")
-
         else:
             try:
                 with open('index.html', 'rb') as f:
                     content = f.read()
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Type', 'text/html')
                 self.send_header('Content-Length', str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
             except Exception as e:
                 self.send_error(404, f"index.html nicht gefunden: {e}")
 
-
-# --- Main ---
 if __name__ == '__main__':
     init_db()
     update_aircraft_db()
