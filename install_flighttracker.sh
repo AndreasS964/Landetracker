@@ -1,47 +1,34 @@
 #!/bin/bash
+echo "📦 Starte vollständige Installation für Flighttracker v1.9h"
 
-set -e
-
-PORT=8083
-LAT=48.27889122038788
-LON=8.42936618151063
-
-echo "📦 Starte vollständige Installation für Flighttracker v1.7"
-
-# Pakete installieren
+# --- System-Update und Essentials ---
 echo "🔧 Pakete installieren..."
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git python3-full python3-venv build-essential pkg-config curl libzstd-dev \
-                     libusb-1.0-0-dev librtlsdr-dev rtl-sdr sqlite3
+sudo apt install -y git python3-full python3-venv build-essential pkg-config curl                     libzstd-dev librtlsdr-dev rtl-sdr libusb-1.0-0-dev sqlite3
 
-# readsb installieren via wiedehopf-Script
+# --- RTL2832 DVB-T Treiber blockieren, damit SDR funktioniert ---
+echo "⚙️ DVB-T Treiber blockieren (falls aktiv)..."
+echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/blacklist-rtl.conf
+sudo modprobe -r dvb_usb_rtl28xxu || true
+
+# --- readsb installieren ---
 echo "📡 Installiere readsb..."
 sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
 
-# Position festlegen
-echo "📍 Setze Position: $LAT, $LON"
-sudo sed -i "s/^LAT=.*/LAT=$LAT/" /etc/default/readsb || true
-sudo sed -i "s/^LONG=.*/LONG=$LON/" /etc/default/readsb || true
-sudo systemctl restart readsb
-
-# Projektordner vorbereiten
-cd ~
+# --- Git Projekt holen (wenn nicht vorhanden) ---
 if [ ! -d "Landetracker" ]; then
+  echo "📥 Lade Projekt von GitHub..."
   git clone https://github.com/AndreasS964/Landetracker.git
 fi
-cd Landetracker
+cd Landetracker || exit 1
 
-# Python-Venv vorbereiten
+# --- Python Umgebung einrichten ---
+echo "🐍 Erstelle virtuelle Umgebung..."
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
 pip install --upgrade pip
 pip install requests
 
-# Platzrunde.gpx sicherstellen
-if [ ! -f platzrunde.gpx ]; then
-  echo "⚠️  platzrunde.gpx nicht gefunden – bitte manuell hinzufügen."
-fi
-
-# Abschluss
+# --- Fertig ---
 echo "✅ Installation abgeschlossen!"
 echo "👉 Starte mit: source venv-tracker/bin/activate && python3 flighttracker.py"

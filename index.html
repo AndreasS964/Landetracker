@@ -45,12 +45,17 @@
   <button onclick="alert('🌐 OpenSky-Abruf folgt')">🌐 OpenSky</button>
   <a href="/log">Log</a> |
   <a href="/stats">Statistiken</a> |
-  <a href="http://localhost/tar1090">tar1090</a> |
-  <a href="http://localhost/graphs1090">graphs1090</a>
+  <a href="#" onclick="openLocal('/tar1090')">tar1090</a> |
+  <a href="#" onclick="openLocal('/graphs1090')">graphs1090</a>
 </div>
 <table id="flights-table"><thead><tr><th>Callsign</th><th>Höhe</th><th>Speed</th><th>Lat</th><th>Lon</th><th>Zeit</th></tr></thead><tbody></tbody></table>
 <footer>v1.9h – Andreas Sika</footer>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+function openLocal(path) {
+  const host = window.location.hostname;
+  window.open(`http://${host}${path}`, '_blank');
+}
+</script>
 <script>
 let map = L.map('map').setView([48.2788, 8.4293], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -114,6 +119,11 @@ function exportCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = 'flugtracker.csv';
   a.click();
+}
+
+function openLocal(path) {
+  const host = window.location.hostname;
+  window.open(`http://${host}${path}`, '_blank');
 }
 </script>
 </body>
