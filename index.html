@@ -1,57 +1,84 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>Flugtracker v1.7</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        html, body { margin: 0; padding: 0; height: 100%; }
-        #map { width: 100%; height: 100%; }
-        .topbar {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: white;
-            padding: 5px 10px;
-            z-index: 1000;
-            border-radius: 5px;
-            box-shadow: 0 0 3px rgba(0,0,0,0.5);
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Flugtracker v1.7</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
+    #map { height: 60%; }
+    #table-wrapper { padding: 1em; background: #f9f9f9; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 4px 8px; border: 1px solid #ccc; font-size: 0.9em; text-align: left; }
+    .controls { margin-bottom: 10px; }
+    .topbar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 6px 10px;
+      z-index: 1000;
+      border-radius: 5px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    }
+  </style>
 </head>
 <body>
-    <div id="map"></div>
-    <div class="topbar">
-        ✈️ Flugtracker v1.7 – <a href="/log" target="_blank">Log anzeigen</a>
+  <div id="map"></div>
+  <div class="topbar">
+    ✈️ Flugtracker v1.7 | <a href="/log" target="_blank">Log anzeigen</a>
+  </div>
+  <div id="table-wrapper">
+    <div class="controls">
+      <label>Filter:</label>
+      <input type="text" id="search" placeholder="Callsign oder Höhe...">
     </div>
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-        const map = L.map('map').setView([48.2789, 8.4293], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-        }).addTo(map);
+    <table>
+      <thead>
+        <tr>
+          <th>Callsign</th>
+          <th>Höhe [ft]</th>
+          <th>Lat</th>
+          <th>Lon</th>
+        </tr>
+      </thead>
+      <tbody id="flights-table"></tbody>
+    </table>
+  </div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([48.2789, 8.4293], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-        let markers = [];
+    let markers = [];
 
-        function updateFlights() {
-            fetch('/flights.json')
-                .then(r => r.json())
-                .then(data => {
-                    markers.forEach(m => map.removeLayer(m));
-                    markers = [];
+    function updateData() {
+      fetch('/flights.json').then(r => r.json()).then(data => {
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
 
-                    data.forEach(f => {
-                        const marker = L.marker([f.lat, f.lon])
-                            .bindPopup(`${f.cs || 'Unbekannt'}<br>Alt: ${f.alt} ft`);
-                        marker.addTo(map);
-                        markers.push(marker);
-                    });
-                })
-                .catch(err => console.error("Fehler beim Laden der Flüge:", err));
-        }
+        const tbody = document.getElementById('flights-table');
+        tbody.innerHTML = '';
+        const filter = document.getElementById('search').value.toLowerCase();
 
-        updateFlights();
-        setInterval(updateFlights, 15000);
-    </script>
+        data.forEach(f => {
+          const rowStr = `${f.cs} ${f.alt}`.toLowerCase();
+          if (!rowStr.includes(filter)) return;
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${f.cs}</td><td>${f.alt}</td><td>${f.lat.toFixed(4)}</td><td>${f.lon.toFixed(4)}</td>`;
+          tbody.appendChild(tr);
+
+          const marker = L.marker([f.lat, f.lon]).bindPopup(`${f.cs}<br>${f.alt} ft`);
+          marker.addTo(map);
+          markers.push(marker);
+        });
+      });
+    }
+
+    setInterval(updateData, 15000);
+    document.getElementById('search').addEventListener('input', updateData);
+    updateData();
+  </script>
 </body>
 </html>
