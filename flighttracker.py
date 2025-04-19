@@ -80,7 +80,6 @@ def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
             return
-
         url = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
         r = requests.get(url, timeout=30)
         try:
@@ -88,12 +87,10 @@ def update_aircraft_db():
         except Exception as e:
             logger.error(f"Fehler beim Parsen der JSON-Antwort: {e} – Inhalt war: {r.text[:100]}")
             return
-
         valid = [e for e in data if e.get('ICAOTypeDesignator')]
         if not valid:
             logger.error("Keine gültigen ICAOTypeDesignator in JSON-Daten gefunden.")
             return
-
         with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
             w.writerow(['icao', 'model'])
@@ -101,9 +98,7 @@ def update_aircraft_db():
                 td = e.get('ICAOTypeDesignator','')
                 m = e.get('Model') or e.get('Name','')
                 w.writerow([td, m])
-
         logger.info(f"Musterliste erfolgreich aktualisiert: {len(valid)} Einträge")
-
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
@@ -168,6 +163,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(content)))
             self.end_headers()
             self.wfile.write(content)
+        elif p.path == '/stats':
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    result = conn.execute("SELECT date(timestamp, 'unixepoch', 'localtime') as day, COUNT(*) FROM flugdaten GROUP BY day ORDER BY day DESC LIMIT 30").fetchall()
+                stat_html = '<table border=1><tr><th>Tag</th><th>Landungen</th></tr>' + ''.join(f'<tr><td>{r[0]}</td><td>{r[1]}</td></tr>' for r in result) + '</table>'
+                content = f'<html><head><meta charset="utf-8"><title>Statistiken</title></head><body><h2>Letzte 30 Tage</h2>{stat_html}<br><a href="/">Zurück</a></body></html>'.encode('utf-8')
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                logger.error(f"Fehler bei /stats: {e}")
+                self.send_error(500, "Fehler beim Abrufen der Statistik")
         elif self.path == '/' or self.path == '/index.html':
             try:
                 with open("index.html", "rb") as f:
@@ -181,10 +190,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_error(404, "index.html nicht gefunden")
         elif self.path == '/flights.json':
             try:
-                cutoff = int(time.time()) - 3600
+                cutoff = int(time.time()) - 7 * 86400
                 with sqlite3.connect(DB_PATH) as conn:
                     rows = conn.execute("SELECT lat, lon, callsign, baro_altitude, velocity, timestamp FROM flugdaten WHERE timestamp > ?", (cutoff,)).fetchall()
-                data = [{"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3], "vel": r[4], "timestamp": r[5]} for r in rows if r[0] and r[1]]
+                data = []
+                for r in rows:
+                    if not r[0] or not r[1]: continue
+                    mode = ""
+                    if r[3] is not None and r[3] < 1200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 1:
+                        mode = "arrival"
+                    elif r[3] is not None and r[3] > 3000 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 1:
+                        mode = "departure"
+                    data.append({"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3], "vel": r[4], "timestamp": r[5], "mode": mode})
                 payload = json.dumps(data).encode('utf-8')
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -202,13 +219,10 @@ if __name__ == '__main__':
     init_db()
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
-
     threading.Thread(target=fetch_and_store, daemon=True).start()
     threading.Thread(target=cleanup_old_data, daemon=True).start()
-
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
-
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
             httpd.serve_forever()
@@ -216,3 +230,4 @@ if __name__ == '__main__':
         logger.critical(f"HTTP-Server abgestürzt: {e}")
     finally:
         logger.info("Flugtracker beendet.")
+
