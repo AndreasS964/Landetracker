@@ -117,26 +117,24 @@ def load_aircraft_db():
 # --- Fetch Daten ---
 def fetch_and_store():
     global aircraft_db
-    while True:
-        try:
-            data = requests.get('http://127.0.0.1:8080/data.json', timeout=5).json()
-            ts = int(time.time())
-            rows = []
-            for ac in data.get('aircraft', []):
-                lat, lon, alt, vel = ac.get('lat'), ac.get('lon'), ac.get('alt_baro'), ac.get('gs')
-                if None in (lat, lon, alt): continue
-                if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
-                    cs = (ac.get('flight') or '').strip()
-                    model = aircraft_db.get(ac.get('t') or '', 'Unbekannt')
-                    rows.append((ac.get('hex'), cs, alt, vel, ts, model, lat, lon))
-            if rows:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.executemany('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', rows)
-                    conn.commit()
-            logger.info(f"{len(rows)} neue Flüge gespeichert.")
-        except Exception as e:
-            logger.error(f"Fehler bei fetch_and_store: {e}")
-        time.sleep(FETCH_INTERVAL)
+    try:
+        data = requests.get('http://127.0.0.1:8080/data.json', timeout=5).json()
+        ts = int(time.time())
+        rows = []
+        for ac in data.get('aircraft', []):
+            lat, lon, alt, vel = ac.get('lat'), ac.get('lon'), ac.get('alt_baro'), ac.get('gs')
+            if None in (lat, lon, alt): continue
+            if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
+                cs = (ac.get('flight') or '').strip()
+                model = aircraft_db.get(ac.get('t') or '', 'Unbekannt')
+                rows.append((ac.get('hex'), cs, alt, vel, ts, model, lat, lon))
+        if rows:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.executemany('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', rows)
+                conn.commit()
+        logger.info(f"{len(rows)} neue Flüge gespeichert.")
+    except Exception as e:
+        logger.error(f"Fehler bei fetch_and_store: {e}")
 
 # --- Cleanup ---
 def cleanup_old_data():
@@ -163,6 +161,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(content)))
             self.end_headers()
             self.wfile.write(content)
+        elif p.path == '/refresh-now':
+            fetch_and_store()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
         elif p.path == '/stats':
             try:
                 with sqlite3.connect(DB_PATH) as conn:
@@ -197,9 +201,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for r in rows:
                     if not r[0] or not r[1]: continue
                     mode = ""
-                    if r[3] is not None and r[3] < 1200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 1:
+                    if r[3] is not None and r[3] < 2200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 3:
                         mode = "arrival"
-                    elif r[3] is not None and r[3] > 3000 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 1:
+                    elif r[3] is not None and r[3] > 3200 and haversine(r[0], r[1], EDTW_LAT, EDTW_LON) < 3:
                         mode = "departure"
                     data.append({"lat": r[0], "lon": r[1], "cs": r[2], "alt": r[3], "vel": r[4], "timestamp": r[5], "mode": mode})
                 payload = json.dumps(data).encode('utf-8')
@@ -219,8 +223,8 @@ if __name__ == '__main__':
     init_db()
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
-    threading.Thread(target=fetch_and_store, daemon=True).start()
     threading.Thread(target=cleanup_old_data, daemon=True).start()
+    threading.Thread(target=fetch_and_store, daemon=True).start()
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
     try:
@@ -230,4 +234,3 @@ if __name__ == '__main__':
         logger.critical(f"HTTP-Server abgestürzt: {e}")
     finally:
         logger.info("Flugtracker beendet.")
-
