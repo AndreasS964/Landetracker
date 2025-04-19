@@ -10,7 +10,6 @@ sudo apt install -y git python3-full python3-venv python3-pip     sqlite3 rtl-sd
 # Projektverzeichnis vorbereiten
 cd ~/ || exit
 rm -rf Landetracker
-git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker || exit
 
 # Python venv einrichten
