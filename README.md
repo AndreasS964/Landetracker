@@ -26,10 +26,10 @@
 Jeder Flugdatenpunkt wird wie folgt bewertet:
 
 - **Anflug (`arrival`)**:  
-  Höhe < 1200 ft **und** Position < 1 NM vom Platz
+  Höhe < 2300 ft **und** Position < 1 NM vom Platz
 
 - **Abflug (`departure`)**:  
-  Höhe > 3000 ft **und** Position < 1 NM vom Platz
+  Höhe > 3200 ft **und** Position < 1 NM vom Platz
 
 → Wird im Feld `mode` gespeichert und ist im Frontend filterbar.
 
