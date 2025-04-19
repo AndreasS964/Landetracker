@@ -1,5 +1,4 @@
-# 🛩️ Flugtracker v1.9e – Andreas Sika
-
+# 🛩️ Flugtracker v1.9e 
 ## 🔧 Funktionen
 
 - 📡 Empfängt Flugdaten über `readsb` oder OpenSky API
@@ -55,4 +54,3 @@ python3 flighttracker.py
 ## 👤 Version
 
 **v1.9e** – entwickelt für Flugleiter und Platzüberwachung  
-**by Andreas Sika**
