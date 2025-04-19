@@ -1,3 +1,4 @@
+
 import http.server
 import socketserver
 import sqlite3
@@ -14,8 +15,6 @@ import sys
 import os
 import logging
 from logging.handlers import RotatingFileHandler
-import socket
-import pyModeS as pms
 
 # --- Konfiguration ---
 PORT = 8083
@@ -28,30 +27,27 @@ VERSION = '1.7'
 FETCH_INTERVAL = 300
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
-GPX_FILE = 'platzrunde.gpx'
 
+# --- Logging einrichten ---
 log_lines = []
+
 class WebLogHandler(logging.Handler):
     def emit(self, record):
-        try:
-            msg = self.format(record)
-            log_lines.append(msg)
-            if len(log_lines) > 1000:
-                log_lines.pop(0)
-        except Exception:
-            pass
+        msg = self.format(record)
+        log_lines.append(msg)
+        if len(log_lines) > 1000:
+            log_lines.pop(0)
 
 logger = logging.getLogger("tracker")
 logger.setLevel(logging.INFO)
-logger.propagate = False
-if not logger.handlers:
-    fh = RotatingFileHandler("tracker.log", maxBytes=2_000_000, backupCount=3)
-    fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    wh = WebLogHandler()
-    wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    logger.addHandler(fh)
-    logger.addHandler(wh)
+fh = RotatingFileHandler("tracker.log", maxBytes=2_000_000, backupCount=3)
+fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+wh = WebLogHandler()
+wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(fh)
+logger.addHandler(wh)
 
+# --- Haversine ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -61,6 +57,7 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c * 0.539957
 
+# --- Init DB ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
@@ -79,23 +76,22 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
 
+# --- Aircraft DB aktualisieren ---
 def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
             return
         url = 'https://raw.githubusercontent.com/VirtualRadarPlugin/AircraftList/master/resources/AircraftList.json'
-        resp = requests.get(url, timeout=30)
-        data = resp.json()
-        entries = data.get('Aircraft', [])
+        data = requests.get(url, timeout=30).json()
         with open(AIRCRAFT_CSV, 'w', newline='', encoding='utf-8') as f:
             w = csv.writer(f)
             w.writerow(['icao', 'model'])
-            for e in entries:
-                td = e.get('ICAOTypeDesignator', '')
-                m = e.get('Model') or e.get('Name', '')
+            for e in data:
+                td = e.get('ICAOTypeDesignator','')
+                m = e.get('Model') or e.get('Name','')
                 if td:
                     w.writerow([td, m])
-        logger.info(f"Musterliste aktualisiert: {len(entries)} Einträge")
+        logger.info(f"Musterliste aktualisiert: {len(data)} Einträge")
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
@@ -110,44 +106,31 @@ def load_aircraft_db():
         logger.error(f"Fehler beim Einlesen der Musterliste: {e}")
     return db
 
-def fetch_beast_and_store():
+# --- Fetch Daten ---
+def fetch_and_store():
     global aircraft_db
     while True:
         try:
-            with socket.create_connection(("127.0.0.1", 30005), timeout=10) as sock:
-                sock.settimeout(2)
-                logger.info("Beast-Modus: Verbindung zu Port 30005 hergestellt.")
-                while True:
-                    data = sock.recv(4096)
-                    if not data:
-                        break
-                    messages = pms.socket.reader(data)
-                    ts = int(time.time())
-                    rows = []
-                    for msg in messages:
-                        try:
-                            icao = pms.adsb.icao(msg)
-                            cs = pms.adsb.callsign(msg) or ''
-                            alt = pms.adsb.altitude(msg)
-                            pos = pms.adsb.position_with_ref(msg, EDTW_LAT, EDTW_LON)
-                            vel = pms.adsb.velocity(msg)[0] if pms.adsb.velocity(msg) else None
-                            if pos is None or alt is None:
-                                continue
-                            lat, lon = pos
-                            if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
-                                model = aircraft_db.get(icao.upper(), 'Unbekannt')
-                                rows.append((icao, cs.strip(), alt, vel, ts, model, lat, lon))
-                        except:
-                            continue
-                    if rows:
-                        with sqlite3.connect(DB_PATH) as conn:
-                            conn.executemany('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', rows)
-                            conn.commit()
-                        logger.info(f"{len(rows)} Flüge aus Beast-Daten gespeichert.")
+            data = requests.get('http://127.0.0.1:8080/data.json', timeout=5).json()
+            ts = int(time.time())
+            rows = []
+            for ac in data.get('aircraft', []):
+                lat, lon, alt, vel = ac.get('lat'), ac.get('lon'), ac.get('alt_baro'), ac.get('gs')
+                if None in (lat, lon, alt): continue
+                if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
+                    cs = (ac.get('flight') or '').strip()
+                    model = aircraft_db.get(ac.get('t') or '', 'Unbekannt')
+                    rows.append((ac.get('hex'), cs, alt, vel, ts, model, lat, lon))
+            if rows:
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.executemany('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', rows)
+                    conn.commit()
+            logger.info(f"{len(rows)} neue Flüge gespeichert.")
         except Exception as e:
-            logger.error(f"Fehler bei Beast-Verbindung: {e}")
-            time.sleep(10)
+            logger.error(f"Fehler bei fetch_and_store: {e}")
+        time.sleep(FETCH_INTERVAL)
 
+# --- Cleanup ---
 def cleanup_old_data():
     while True:
         try:
@@ -160,14 +143,33 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# Handler bleibt unverändert ...
+# --- Webserver (minimal für Demo) ---
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        p = urlparse(self.path)
+        if p.path == '/log':
+            log_html = '<br>'.join(str(line) for line in log_lines[-50:])
+            content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        else:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(f"Flugtracker v{VERSION} läuft.".encode())
 
+# --- Main ---
 if __name__ == '__main__':
     init_db()
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
-    threading.Thread(target=fetch_beast_and_store, daemon=True).start()
+
+    threading.Thread(target=fetch_and_store, daemon=True).start()
     threading.Thread(target=cleanup_old_data, daemon=True).start()
+
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
