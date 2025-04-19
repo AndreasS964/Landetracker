@@ -31,6 +31,7 @@ FETCH_INTERVAL = 300
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
+GPX_FILE = 'platzrunde.gpx'
 
 # --- Logging einrichten ---
 log_lines = []
@@ -154,16 +155,37 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
+# --- Platzrunde laden ---
+def load_platzrunde():
+    try:
+        with open(GPX_FILE, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.warning(f"Platzrunde konnte nicht geladen werden: {e}")
+        return ""
+
 # --- Watchdog Pinger ---
 def watchdog_loop():
     while True:
         notify("WATCHDOG=1")
         time.sleep(WATCHDOG_INTERVAL // 2)
 
-# --- Webserver ---
+# --- OpenSky Abruf ---
+def fetch_opensky():
+    try:
+        logger.info("OpenSky-Datenabruf gestartet...")
+        r = requests.get("https://opensky-network.org/api/states/all", timeout=10)
+        if r.ok:
+            logger.info(f"OpenSky-Daten erfolgreich abgerufen ({len(r.content)} Bytes)")
+        else:
+            logger.warning(f"OpenSky-Antwortstatus: {r.status_code}")
+    except Exception as e:
+        logger.error(f"Fehler beim OpenSky-Abruf: {e}")
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
+
         if p.path == '/log':
             log_html = '<br>'.join(str(line) for line in log_lines[-50:])
             content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
@@ -172,12 +194,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length', str(len(content)))
             self.end_headers()
             self.wfile.write(content)
+
         elif p.path == '/refresh-now':
             threading.Thread(target=fetch_and_store, daemon=True).start()
             self.send_response(200)
             self.end_headers()
+
+        elif p.path == '/fetch-opensky':
+            threading.Thread(target=fetch_opensky, daemon=True).start()
+            self.send_response(200)
+            self.end_headers()
+
+        elif p.path == '/platzrunde.gpx':
+            content = load_platzrunde().encode('utf-8')
+            if content:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/gpx+xml; charset=utf-8')
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_error(404, "Platzrunde nicht gefunden")
+
         elif p.path == '/flights.json':
-            params = parse_qs(p.query)
             try:
                 with sqlite3.connect(DB_PATH) as conn:
                     cur = conn.cursor()
@@ -191,6 +230,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(content)
             except Exception as e:
                 self.send_error(500, f"Fehler beim Lesen der Flugdaten: {e}")
+
         elif p.path == '/export.csv':
             try:
                 with sqlite3.connect(DB_PATH) as conn:
@@ -199,15 +239,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     rows = cur.fetchall()
                     headers = [desc[0] for desc in cur.description]
                     output = [','.join(headers)] + [','.join(map(str, row)) for row in rows]
-                    content = '\n'.join(output).encode('utf-8')
+                    content = '
+'.join(output).encode('utf-8')
                     self.send_response(200)
                     self.send_header('Content-Type', 'text/csv')
-                    self.send_header('Content-Disposition', 'attachment; filename="flugdaten.csv"')
+                    self.send_header('Content-Disposition', 'attachment; filename=flugdaten.csv')
                     self.send_header('Content-Length', str(len(content)))
                     self.end_headers()
                     self.wfile.write(content)
             except Exception as e:
                 self.send_error(500, f"Fehler beim CSV-Export: {e}")
+
         else:
             try:
                 with open('index.html', 'rb') as f:
@@ -219,6 +261,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except Exception as e:
                 self.send_error(404, f"index.html nicht gefunden: {e}")
+
 
 # --- Main ---
 if __name__ == '__main__':
