@@ -209,6 +209,7 @@ data.forEach(f=>L.marker([f.lat,f.lon]).addTo(map).bindPopup(f.cs + '<br>' + f.a
     threading.Thread(target=cleanup_old_data, daemon=True).start()
 
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
+    print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
     try:
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
             httpd.serve_forever()
