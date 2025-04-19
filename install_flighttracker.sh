@@ -5,12 +5,18 @@ echo "📦 Starte vollständige Installation für Flighttracker v1.7"
 # System aktualisieren und Pakete installieren
 echo "🔧 Pakete installieren..."
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git python3-full python3-venv python3-pip     sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev     curl libzstd-dev
+sudo apt install -y git
+sudo apt install -y python3-full python3-venv python3-pip \
+    sqlite3 rtl-sdr build-essential pkg-config libusb-1.0-0-dev librtlsdr-dev \
+    curl libzstd-dev
 
-# Projektverzeichnis vorbereiten
-cd ~/ || exit
-rm -rf Landetracker
-cd Landetracker || exit
+# Projektverzeichnis vorbereiten, nur wenn noch nicht drin
+if [ "$(basename "$PWD")" != "Landetracker" ]; then
+    cd ~ || exit
+    rm -rf Landetracker
+    git clone https://github.com/AndreasS964/Landetracker.git
+    cd Landetracker || exit
+fi
 
 # Python venv einrichten
 echo "🐍 Python-Venv vorbereiten..."

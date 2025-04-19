@@ -24,10 +24,11 @@ Ein vollständiger ADS-B Flugtracker für Raspberry Pi – verarbeitet lokale Da
 
 ## 🚀 Installation
 ```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git
 git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker
-sudo apt update && sudo apt upgrade -y
-sudo apt install python3-full libzstd-dev -y
+sudo apt install -y python3-full libzstd-dev
 bash install_flighttracker.sh
 ```
 
