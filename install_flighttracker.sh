@@ -59,3 +59,23 @@ sudo systemctl enable flighttracker.service
 
 echo "✅ Installation abgeschlossen!"
 echo "👉 Starte manuell mit: python3 ~/Landetracker/flighttracker.py"
+
+echo "🌐 Lighttpd-Reverse-Proxy einrichten..."
+sudo apt install -y lighttpd
+sudo lighty-enable-mod proxy
+sudo lighty-enable-mod proxy-http
+sudo tee /etc/lighttpd/conf-available/88-flighttracker.conf > /dev/null <<EOF
+server.modules += ( "mod_proxy", "mod_proxy_http" )
+\$HTTP["url"] =~ "^/" {
+  proxy.server = (
+    "" => (
+      "flighttracker" => (
+        "host" => "127.0.0.1",
+        "port" => 8083
+      )
+    )
+  )
+}
+EOF
+sudo lighty-enable-mod 88-flighttracker
+sudo systemctl restart lighttpd
