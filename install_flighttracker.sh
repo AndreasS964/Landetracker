@@ -1,47 +1,48 @@
 #!/bin/bash
 
-echo "📦 Starte vollständige Installation für Flighttracker v1.8"
+echo "📦 Starte Installation für Flighttracker v1.8 (ohne venv)"
 cd ~
 
-echo "🔧 Benötigte Pakete installieren..."
+echo "🔧 Systempakete installieren..."
 sudo apt update
-sudo apt install -y git python3-full python3-venv python3-pip rtl-sdr sqlite3 unzip curl
+sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl
 
-echo "🧹 Eventuell blockierende RTL-Treiber deaktivieren..."
+echo "🧹 RTL-Treiber blockieren..."
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-echo "📦 Flighttracker aus GitHub klonen..."
+echo "📦 Repository klonen..."
 rm -rf ~/Landetracker
 git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker
 
-echo "🐍 Python-Umgebung einrichten..."
-python3 -m venv venv-tracker
-source venv-tracker/bin/activate
-pip install --upgrade pip
-pip install requests
+echo "🐍 Python-Abhängigkeiten installieren (systemweit)..."
+pip3 install requests --break-system-packages
 
-echo "📄 Neue index.html anwenden (falls vorhanden)..."
-if [ -f index.html ]; then
-  cp -f index.html index.html.bak 2>/dev/null
-  wget -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
-fi
+echo "📄 index.html aktualisieren..."
+wget -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
 
 echo "📡 readsb installieren..."
 sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
 
-echo "🔁 Platzrunde und Logo kopieren (falls vorhanden)..."
+echo "🛰️ DuckDNS vorbereiten..."
+mkdir -p ~/duckdns
+echo '#!/bin/bash' > ~/duckdns/duck.sh
+echo 'echo url="https://www.duckdns.org/update?domains=andreassika&token=89d793ae-f4a3-486f-ad52-7475986679af&ip=" | curl -k -o ~/duckdns/duck.log -K -' >> ~/duckdns/duck.sh
+chmod 700 ~/duckdns/duck.sh
+(crontab -l 2>/dev/null; echo "*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1") | crontab -
+
+echo "📁 Platzrunde & Logo kopieren (falls vorhanden)..."
 cp platzrunde.gpx logo.png . 2>/dev/null || true
 
-echo "🔁 Systemd-Dienst für Autostart einrichten..."
+echo "🔁 Autostart-Dienst einrichten..."
 cat <<EOF | sudo tee /etc/systemd/system/flighttracker.service
 [Unit]
 Description=Flighttracker Webserver
 After=network.target
 
 [Service]
-ExecStart=$(pwd)/venv-tracker/bin/python3 $(pwd)/flighttracker.py
-WorkingDirectory=$(pwd)
+ExecStart=/usr/bin/python3 /home/pi/Landetracker/flighttracker.py
+WorkingDirectory=/home/pi/Landetracker
 Restart=always
 User=pi
 WatchdogSec=60
@@ -57,4 +58,4 @@ sudo systemctl daemon-reload
 sudo systemctl enable flighttracker.service
 
 echo "✅ Installation abgeschlossen!"
-echo "👉 Starte mit: source venv-tracker/bin/activate && python3 flighttracker.py"
+echo "👉 Starte manuell mit: python3 ~/Landetracker/flighttracker.py"
