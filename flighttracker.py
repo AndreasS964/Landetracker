@@ -27,14 +27,26 @@ DB_PATH = 'flugdaten.db'
 AIRCRAFT_CSV = 'aircraft_db.csv'
 EDTW_LAT = 48.27889122038788
 EDTW_LON = 8.42936618151063
-MAX_RADIUS_NM = 5
-VERSION = '1.8'
+VERSION = '1.9'
 FETCH_INTERVAL = 300
-ADSBL_API = "https://api.adsb.lol/v2/geo/aircraft"
+ADSBL_API = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{nm}"
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
 GPX_FILE = 'platzrunde.gpx'
+SETTINGS_FILE = 'settings.json'
+
+# --- Settings laden ---
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                return json.load(f)
+        except: pass
+    return {"radius_nm": 5}
+
+settings = load_settings()
+current_radius_nm = settings.get("radius_nm", 5)
 
 log_lines = []
 class WebLogHandler(logging.Handler):
@@ -145,20 +157,26 @@ def watchdog_loop():
 def fetch_adsblol():
     try:
         logger.info("adsb.lol-Datenabruf gestartet...")
-        url = f"{ADSBL_API}?lat={EDTW_LAT}&lon={EDTW_LON}&radius={MAX_RADIUS_NM}"
+        url = f"https://api.adsb.lol/v2/lat/{EDTW_LAT}/lon/{EDTW_LON}/dist/{current_radius_nm}"
         r = requests.get(url, timeout=10)
         if r.ok:
-            data = r.json()
-            count = len(data.get("aircraft", []))
-            logger.info(f"adsb.lol-Daten erfolgreich abgerufen ({len(r.content)} Bytes, {count} Flieger)")
+            try:
+                data = r.json()
+                count = len(data.get("aircraft", []))
+                logger.info(f"adsb.lol-Daten erfolgreich abgerufen ({len(r.content)} Bytes, {count} Flieger)")
+            except Exception as e:
+                logger.error(f"Fehler beim Parsen der adsb.lol-Daten: {e} – Inhalt war: {r.text[:100]}")
         else:
-            logger.warning(f"adsb.lol-Antwortstatus: {r.status_code}")
+            logger.warning(f"adsb.lol-Antwortstatus: {r.status_code} – {r.text[:100]}")
     except Exception as e:
         logger.error(f"Fehler beim adsb.lol-Abruf: {e}")
 
 def adsblol_loop():
     while True:
-        fetch_adsblol()
+        try:
+            fetch_adsblol()
+        except Exception as e:
+            logger.critical(f"adsblol_loop abgestürzt: {e}")
         time.sleep(FETCH_INTERVAL)
 
 def fetch_stats():
@@ -180,6 +198,7 @@ def fetch_stats():
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
+        global current_radius_nm
         parsed = urlparse(self.path)
         if parsed.path == "/log":
             content = '<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>'
@@ -201,6 +220,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/gpx+xml")
             self.end_headers()
             self.wfile.write(data.encode("utf-8"))
+        elif parsed.path == "/radius":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"radius_nm": current_radius_nm}).encode("utf-8"))
+        elif parsed.path.startswith("/set_radius"):
+            try:
+                params = parse_qs(parsed.query)
+                new_val = int(params.get("nm", [current_radius_nm])[0])
+                current_radius_nm = new_val
+                with open(SETTINGS_FILE, 'w') as f:
+                    json.dump({"radius_nm": current_radius_nm}, f)
+                logger.info(f"Radius geändert: {current_radius_nm} NM")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "radius": current_radius_nm}).encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Fehler bei set_radius: {e}")
+                self.send_error(500, str(e))
         elif parsed.path == "/links":
             content = '''<html><head><meta charset="utf-8"><title>Links</title></head><body>
             <h2>Externe Tools</h2>
