@@ -28,6 +28,7 @@ EDTW_LON = 8.42936618151063
 MAX_RADIUS_NM = 5
 VERSION = '1.7'
 FETCH_INTERVAL = 300
+OPENSKY_INTERVAL = 600
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
@@ -65,18 +66,9 @@ def haversine(lat1, lon1, lat2, lon2):
 # --- Init DB ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS flugdaten (
-                hex TEXT,
-                callsign TEXT,
-                baro_altitude REAL,
-                velocity REAL,
-                timestamp INTEGER,
-                muster TEXT,
-                lat REAL,
-                lon REAL
-            )
-        ''')
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS flugdaten (hex TEXT, callsign TEXT, baro_altitude REAL, velocity REAL, timestamp INTEGER, muster TEXT, lat REAL, lon REAL)"
+        )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_time ON flugdaten(timestamp)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
@@ -170,90 +162,27 @@ def watchdog_loop():
         notify("WATCHDOG=1")
         time.sleep(WATCHDOG_INTERVAL // 2)
 
-# --- OpenSky Abruf ---
+# --- OpenSky ---
 def fetch_opensky():
     try:
         logger.info("OpenSky-Datenabruf gestartet...")
         r = requests.get("https://opensky-network.org/api/states/all", timeout=10)
         if r.ok:
-            logger.info(f"OpenSky-Daten erfolgreich abgerufen ({len(r.content)} Bytes)")
+            data = r.json()
+            count = len(data.get("states", []))
+            logger.info(f"OpenSky-Daten erfolgreich abgerufen ({len(r.content)} Bytes, {count} Flieger)")
         else:
             logger.warning(f"OpenSky-Antwortstatus: {r.status_code}")
     except Exception as e:
         logger.error(f"Fehler beim OpenSky-Abruf: {e}")
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        p = urlparse(self.path)
+def opensky_loop():
+    while True:
+        fetch_opensky()
+        time.sleep(OPENSKY_INTERVAL)
 
-        if p.path == '/':
-            self.path = '/index.html'
-            return super().do_GET()
-
-        elif p.path == '/log':
-            log_html = '<br>'.join(str(line) for line in log_lines[-50:])
-            content = f'<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>{log_html}</pre><a href="/">Zurück</a></body></html>'.encode('utf-8')
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.send_header('Content-Length', str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
-
-        elif p.path == '/refresh-now':
-            threading.Thread(target=fetch_and_store, daemon=True).start()
-            self.send_response(200)
-            self.end_headers()
-
-        elif p.path == '/fetch-opensky':
-            threading.Thread(target=fetch_opensky, daemon=True).start()
-            self.send_response(200)
-            self.end_headers()
-
-        elif p.path == '/platzrunde.gpx':
-            content = load_platzrunde().encode('utf-8')
-            if content:
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/gpx+xml; charset=utf-8')
-                self.send_header('Content-Length', str(len(content)))
-                self.end_headers()
-                self.wfile.write(content)
-            else:
-                self.send_error(404, "Platzrunde nicht gefunden")
-
-        elif p.path == '/flights.json':
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cur = conn.cursor()
-                    cur.execute("SELECT hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon FROM flugdaten ORDER BY timestamp DESC LIMIT 500")
-                    data = [dict(zip([col[0] for col in cur.description], row)) for row in cur.fetchall()]
-                    content = json.dumps(data).encode('utf-8')
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Content-Length', str(len(content)))
-                    self.end_headers()
-                    self.wfile.write(content)
-            except Exception as e:
-                self.send_error(500, f"Fehler beim Lesen der Flugdaten: {e}")
-
-        elif p.path == '/export.csv':
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cur = conn.cursor()
-                    cur.execute("SELECT * FROM flugdaten ORDER BY timestamp DESC")
-                    rows = cur.fetchall()
-                    headers = [desc[0] for desc in cur.description]
-                    output = [','.join(headers)] + [','.join(map(str, row)) for row in rows]
-                    content = '\n'.join(output).encode('utf-8')
-                    self.send_response(200)
-                    self.send_header('Content-Type', 'text/csv')
-                    self.send_header('Content-Disposition', 'attachment; filename=flugdaten.csv')
-                    self.send_header('Content-Length', str(len(content)))
-                    self.end_headers()
-                    self.wfile.write(content)
-            except Exception as e:
-                self.send_error(500, f"Fehler beim CSV-Export: {e}")
-        else:
-            super().do_GET()
+# Dummy Handler
+class Handler(http.server.SimpleHTTPRequestHandler): pass
 
 # --- Main ---
 if __name__ == '__main__':
@@ -263,7 +192,8 @@ if __name__ == '__main__':
     threading.Thread(target=cleanup_old_data, daemon=True).start()
     threading.Thread(target=fetch_and_store, daemon=True).start()
     threading.Thread(target=watchdog_loop, daemon=True).start()
-    os.chdir(os.path.dirname(__file__))  # sicheres Arbeitsverzeichnis
+    threading.Thread(target=opensky_loop, daemon=True).start()
+    os.chdir(os.path.dirname(__file__))
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
     try:
