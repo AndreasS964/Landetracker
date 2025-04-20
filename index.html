@@ -28,8 +28,16 @@
       padding: 0.5rem;
       display: flex;
       flex-wrap: wrap;
+      justify-content: flex-start;
+      align-items: center;
       gap: 0.5rem;
-      justify-content: center;
+    }
+    #filters label { font-weight: bold; margin-right: 0.5rem; }
+    #filters input[type="date"], #filters input[type="number"] {
+      padding: 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: auto;
     }
     #filters button {
       padding: 0.4rem 0.8rem;
@@ -74,18 +82,26 @@
       <a href="/log">📄 Log</a>
       <a href="/stats">📊 Statistik</a>
       <a href="/platzrunde.gpx">📡 Platzrunde</a>
-      <a href="/tar1090">📟 tar1090</a>
-      <a href="/graphs1090">📈 Graphs</a>
+      <a href="http://localhost/tar1090">📟 tar1090</a>
+      <a href="http://localhost/graphs1090">📈 Graphs</a>
     </nav>
   </header>
 
   <div id="filters">
-    <button onclick="setFilter('today')">📅 Heute</button>
-    <button onclick="setFilter('week')">📆 Woche</button>
-    <button onclick="setFilter('arrival')">🛬 Anflug</button>
-    <button onclick="setFilter('departure')">🛫 Abflug</button>
-    <button onclick="setRadius(3)">🔁 Platzrunde</button>
-    <button onclick="setRadius(5)">📍 Radius: 5NM</button>
+    <label for="from">Von:</label>
+    <input type="date" id="from" />
+    <label for="to">Bis:</label>
+    <input type="date" id="to" />
+    <button onclick="setDateToday()">📅 Heute</button>
+    <button onclick="setDateWeek()">📆 Woche</button>
+    <button onclick="clearFilters()">🧹 Alle</button>
+    <span>|</span>
+    <button onclick="filterType='arrival'; refreshData();">🛬 Anflug</button>
+    <button onclick="filterType='departure'; refreshData();">🛫 Abflug</button>
+    <button onclick="filterType='pattern'; refreshData();">🔁 Platzrunde</button>
+    <label for="radius">Radius NM:</label>
+    <input type="number" id="radius" value="3" min="1" max="20" step="1" />
+    <button onclick="applyRadius()">📍 Setzen</button>
     <button onclick="refreshData()">🔄 Aktualisieren</button>
     <button onclick="downloadCSV()">💾 CSV</button>
     <button onclick="fetchADSB()">🌐 ADS-B.lol</button>
@@ -114,6 +130,8 @@
     }).addTo(map);
 
     let aircraftMarkers = [];
+    let currentRadius = 3;
+    let filterType = '';
 
     fetch("/platzrunde.gpx")
       .then(res => res.text())
@@ -128,31 +146,55 @@
         }
       });
 
-    function setFilter(type) {
-      console.log("Setze Filter:", type);
+    function setDateToday() {
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("from").value = today;
+      document.getElementById("to").value = today;
+      refreshData();
     }
-    function setRadius(nm) {
-      console.log("Radius gesetzt auf:", nm);
+    function setDateWeek() {
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 6 * 86400000);
+      document.getElementById("from").value = weekAgo.toISOString().split("T")[0];
+      document.getElementById("to").value = now.toISOString().split("T")[0];
+      refreshData();
+    }
+    function clearFilters() {
+      document.getElementById("from").value = "";
+      document.getElementById("to").value = "";
+      filterType = "";
+      refreshData();
+    }
+    function applyRadius() {
+      currentRadius = parseInt(document.getElementById("radius").value);
+      refreshData();
     }
     function refreshData() {
       fetch("/flights.json")
         .then(res => res.json())
         .then(data => {
-          // Tabelle aktualisieren
+          const from = document.getElementById("from").value;
+          const to = document.getElementById("to").value;
           const tbody = document.getElementById("flightTable");
           tbody.innerHTML = "";
-          data.forEach(f => {
+          const filtered = data.filter(f => {
+            const ts = new Date(f.time * 1000);
+            const matchDate = (!from || ts >= new Date(from)) && (!to || ts <= new Date(to + "T23:59:59"));
+            const matchRadius = !f.lat || !f.lon || !f.dist || f.dist <= currentRadius;
+            const matchType = !filterType || f.typ === filterType;
+            return matchDate && matchRadius && matchType;
+          });
+
+          filtered.forEach(f => {
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.alt}</td><td>${f.speed}</td><td>${f.time}</td>`;
+            tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.alt}</td><td>${f.speed}</td><td>${new Date(f.time * 1000).toLocaleString()}</td>`;
             tbody.appendChild(tr);
           });
 
-          // Alte Marker entfernen
           aircraftMarkers.forEach(m => map.removeLayer(m));
           aircraftMarkers = [];
 
-          // Neue Marker setzen
-          data.forEach(f => {
+          filtered.forEach(f => {
             if (f.lat && f.lon) {
               const marker = L.marker([f.lat, f.lon], {
                 icon: L.divIcon({
@@ -174,7 +216,6 @@
     function fetchADSB() {
       fetch("/api/adsb").then(() => refreshData());
     }
-    // Initialer Abruf
     refreshData();
   </script>
 </body>
