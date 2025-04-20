@@ -25,6 +25,7 @@ cd ~/Landetracker || { echo "❌ Landetracker-Verzeichnis fehlt!"; exit 1; }
 echo "🐍 Python-Umgebung einrichten..."
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
+pip install requests
 pip install -r requirements.txt || pip install requests
 
 # Systemd-Dienst anlegen
@@ -67,3 +68,4 @@ echo "✅ Webfrontend erreichbar unter: http://<IP>/index.html"
 
 echo "✅ Installation abgeschlossen!"
 echo "👉 Starte mit: source venv-tracker/bin/activate && python3 flighttracker.py"
+pip install requests
