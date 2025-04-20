@@ -1,16 +1,16 @@
 #!/bin/bash
 
-echo "📦 Starte Installation für Flighttracker v1.8 (ohne venv)"
+echo "📦 Starte Installation für Flighttracker v1.8 (clean Pi Setup)"
 cd ~
 
 echo "🔧 Systempakete installieren..."
 sudo apt update
-sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl
+sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl netcat
 
 echo "🧹 RTL-Treiber blockieren..."
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-echo "📦 Repository klonen..."
+echo "📁 Flighttracker-Ordner vorbereiten..."
 rm -rf ~/Landetracker
 git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker
@@ -19,7 +19,7 @@ echo "🐍 Python-Abhängigkeiten installieren (systemweit)..."
 pip3 install requests --break-system-packages
 
 echo "📄 index.html aktualisieren..."
-wget -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
+wget -q -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
 
 echo "📡 readsb installieren..."
 sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
@@ -31,7 +31,7 @@ echo 'echo url="https://www.duckdns.org/update?domains=andreassika&token=89d793a
 chmod 700 ~/duckdns/duck.sh
 (crontab -l 2>/dev/null; echo "*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1") | crontab -
 
-echo "📁 Platzrunde & Logo kopieren (falls vorhanden)..."
+echo "📁 Platzrunde & Logo sichern (falls vorhanden)..."
 cp platzrunde.gpx logo.png . 2>/dev/null || true
 
 echo "🔁 Autostart-Dienst einrichten..."
