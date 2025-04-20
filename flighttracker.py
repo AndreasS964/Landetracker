@@ -17,9 +17,9 @@ from logging.handlers import RotatingFileHandler
 try:
     from systemd.daemon import notify
 except ImportError:
-    def notify(msg): pass  # Fallback für Nicht-Systemd-Systeme
+    def notify(msg): pass
 
-os.chdir(os.path.dirname(__file__))  # Fix für Logging-Dateipfad
+os.chdir(os.path.dirname(__file__))
 
 # --- Konfiguration ---
 PORT = 8083
@@ -36,9 +36,7 @@ MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
 GPX_FILE = 'platzrunde.gpx'
 
-# --- Logging einrichten ---
 log_lines = []
-
 class WebLogHandler(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
@@ -55,7 +53,6 @@ wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(fh)
 logger.addHandler(wh)
 
-# --- Haversine ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -65,7 +62,6 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c * 0.539957
 
-# --- Init DB ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
@@ -84,7 +80,6 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
 
-# --- Aircraft DB aktualisieren ---
 def update_aircraft_db():
     try:
         if os.path.exists(AIRCRAFT_CSV) and time.time() - os.path.getmtime(AIRCRAFT_CSV) < 180 * 86400:
@@ -111,7 +106,6 @@ def update_aircraft_db():
     except Exception as e:
         logger.error(f"Fehler beim Laden der Musterliste: {e}")
 
-# --- Aircraft DB laden ---
 def load_aircraft_db():
     db = {}
     try:
@@ -123,7 +117,6 @@ def load_aircraft_db():
         logger.error(f"Fehler beim Einlesen der Musterliste: {e}")
     return db
 
-# --- Platzrunde laden ---
 def load_platzrunde():
     try:
         with open(GPX_FILE, 'r', encoding='utf-8') as f:
@@ -132,7 +125,6 @@ def load_platzrunde():
         logger.warning(f"Platzrunde konnte nicht geladen werden: {e}")
         return ""
 
-# --- Cleanup ---
 def cleanup_old_data():
     while True:
         try:
@@ -145,13 +137,11 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Watchdog Pinger ---
 def watchdog_loop():
     while True:
         notify("WATCHDOG=1")
         time.sleep(WATCHDOG_INTERVAL // 2)
 
-# --- ADSB.lol Abruf ---
 def fetch_adsblol():
     try:
         logger.info("adsb.lol-Datenabruf gestartet...")
@@ -171,7 +161,6 @@ def adsblol_loop():
         fetch_adsblol()
         time.sleep(FETCH_INTERVAL)
 
-# --- Statistikdaten ---
 def fetch_stats():
     out = {}
     try:
@@ -189,7 +178,6 @@ def fetch_stats():
         logger.error(f"Fehler bei Statistikabfrage: {e}")
     return out
 
-# --- Webserver Handler ---
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -213,10 +201,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/gpx+xml")
             self.end_headers()
             self.wfile.write(data.encode("utf-8"))
+        elif parsed.path == "/links":
+            content = '''<html><head><meta charset="utf-8"><title>Links</title></head><body>
+            <h2>Externe Tools</h2>
+            <ul>
+              <li><a href="http://localhost/tar1090/" target="_blank">tar1090</a></li>
+              <li><a href="http://localhost/graphs1090/" target="_blank">graphs1090</a></li>
+            </ul>
+            <a href="/">Zurück</a></body></html>'''
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
         else:
             return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
-# --- Main ---
 if __name__ == '__main__':
     init_db()
     update_aircraft_db()
