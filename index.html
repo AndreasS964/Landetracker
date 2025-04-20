@@ -1,145 +1,136 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <title>Flugtracker v1.8</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8">
+  <title>Flugtracker v1.7</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/togeojson@0.16.0"></script>
   <style>
-    body { margin: 0; font-family: sans-serif; background: #eef2f5; }
-    header {
-      background: #002b55;
-      color: white;
-      padding: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header img { height: 40px; margin-right: 1rem; }
-    header h1 { font-size: 1.2rem; margin: 0; }
-    nav a {
-      color: white;
-      text-decoration: none;
-      margin-left: 1rem;
-      font-weight: bold;
-    }
-    #filters {
-      background: #e0e0e0;
-      padding: 0.5rem;
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-    #filters button {
-      padding: 0.4rem 0.8rem;
-      border: none;
-      background: #1976d2;
-      color: white;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    #main {
-      display: flex;
-      height: 70vh;
-    }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f0f2f5; }
+    #banner { background: #002b4d; color: white; display: flex; align-items: center; padding: 6px 10px; font-size: 18px; }
+    #banner img { height: 40px; margin-right: 12px; }
+    #banner a { color: white; margin-left: auto; margin-right: 15px; font-size: 14px; text-decoration: none; }
+    #layout { display: flex; height: calc(100vh - 60px); }
     #map { flex: 2; }
-    #flights { flex: 1; overflow-y: auto; background: white; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td {
-      padding: 0.5rem;
-      border-bottom: 1px solid #ccc;
-      text-align: left;
+    #right { flex: 1; background: #fff; display: flex; flex-direction: column; padding: 10px; overflow-y: auto; }
+    .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .controls button, .controls select, .controls input {
+      padding: 6px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;
     }
-    #chartbox { padding: 1rem; background: white; }
-    footer {
-      text-align: center;
-      padding: 0.5rem;
-      background: #002b55;
-      color: white;
-    }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ccc; padding: 4px; font-size: 13px; }
+    #footer { text-align: center; font-size: 12px; background: #002b4d; color: white; padding: 4px; }
   </style>
 </head>
 <body>
-  <header>
-    <div style="display: flex; align-items: center;">
-      <img src="logo.png" alt="Logo" />
-      <h1>Flugtracker v1.8</h1>
+<div id="banner">
+  <img src="logo.png" alt="Logo" />
+  Flugtracker v1.7
+  <a href="/log">📄 Log</a>
+  <a href="/stats">📈 Statistiken</a>
+</div>
+<div id="layout">
+  <div id="map"></div>
+  <div id="right">
+    <div class="controls">
+      <button onclick="fetchFlights()">🔄 Aktualisieren</button>
+      <button onclick="fetchOpenSky()">🌐 OpenSky</button>
+      <button onclick="location.href='/export.csv'">📥 CSV</button>
+      <button onclick="location.href='/graphs1090'">📊 Graphs</button>
+      <button onclick="location.href='/tar1090'">🗺️ tar1090</button>
     </div>
-    <nav>
-      <a href="/log">📄 Log</a>
-      <a href="/stats">📊 Statistik</a>
-      <a href="/platzrunde.gpx">📡 Platzrunde</a>
-    </nav>
-  </header>
-
-  <div id="filters">
-    <button>📅 Heute</button>
-    <button>📆 Woche</button>
-    <button>🛬 Anflug</button>
-    <button>🛫 Abflug</button>
-    <button>🔁 Platzrunde</button>
-    <button>📍 Radius: 3NM</button>
-  </div>
-
-  <div id="main">
-    <div id="map"></div>
-    <div id="flights">
-      <table>
-        <thead>
-          <tr><th>Callsign</th><th>Typ</th><th>Alt</th><th>Speed</th><th>Zeit</th></tr>
-        </thead>
-        <tbody><tr><td colspan="5">⏳ Lade Flugdaten...</td></tr></tbody>
-      </table>
+    <div class="controls">
+      📅 von: <input type="date" id="fromDate" />
+      📅 bis: <input type="date" id="toDate" />
+      📆 <button onclick="setQuickDate(0)">Heute</button>
+      <button onclick="setQuickDate(7)">7 Tage</button>
+      <button onclick="setQuickDate(30)">30 Tage</button>
     </div>
+    <div class="controls">
+      ✈️ Bewegungsart:
+      <select id="movementType">
+        <option value="all">alle</option>
+        <option value="arrival">Anflug</option>
+        <option value="departure">Abflug</option>
+      </select>
+      📏 Radius: <input type="number" id="radiusInput" value="5" min="1" max="20" style="width: 60px;">
+      <button onclick="document.getElementById('radiusInput').value = 3">📍 Platzrunde</button>
+    </div>
+    <table id="flightTable">
+      <thead><tr><th>Callsign</th><th>Typ</th><th>Höhe</th><th>Speed</th><th>Zeit</th></tr></thead>
+      <tbody></tbody>
+    </table>
   </div>
+</div>
+<div id="footer">– Andreas Sika –</div>
+<script>
+let map = L.map('map').setView([48.2789, 8.4293], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+let flightLayer = L.layerGroup().addTo(map);
 
-  <div id="chartbox">
-    <canvas id="statsChart" height="100"></canvas>
-  </div>
+function setQuickDate(days) {
+  let now = new Date();
+  let from = new Date();
+  from.setDate(now.getDate() - days);
+  document.getElementById("fromDate").valueAsDate = from;
+  document.getElementById("toDate").valueAsDate = now;
+}
 
-  <footer>
-    powered by Andreas Sika – v1.8
-  </footer>
-
-  <script>
-    const map = L.map('map').setView([48.2789, 8.4293], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18
-    }).addTo(map);
-
-    fetch("/platzrunde.gpx")
-      .then(res => res.text())
-      .then(gpx => new window.DOMParser().parseFromString(gpx, "application/xml"))
-      .then(gpxData => {
-        const track = [];
-        gpxData.querySelectorAll("trkpt").forEach(pt => {
-          track.push([parseFloat(pt.getAttribute("lat")), parseFloat(pt.getAttribute("lon"))]);
-        });
-        if (track.length) {
-          L.polyline(track, { color: "orange" }).addTo(map);
-        }
+function fetchFlights() {
+  fetch('/flights.json')
+    .then(r => r.json())
+    .then(data => {
+      let radiusLimit = parseFloat(document.getElementById("radiusInput").value) || 5;
+      flightLayer.clearLayers();
+      const tbody = document.querySelector('#flightTable tbody');
+      tbody.innerHTML = '';
+      data.forEach(f => {
+        const dist = haversine(48.2789, 8.4293, f.lat, f.lon);
+        if (dist > radiusLimit) return;
+        const marker = L.circleMarker([f.lat, f.lon], {radius: 4, color: 'red'})
+          .bindPopup(`<b>${f.callsign || ''}</b><br>${f.muster}<br>${f.baro_altitude} ft<br>${f.velocity || '-'} kt`);
+        flightLayer.addLayer(marker);
+        let row = tbody.insertRow();
+        row.insertCell().textContent = f.callsign || '';
+        row.insertCell().textContent = f.muster;
+        row.insertCell().textContent = f.baro_altitude;
+        row.insertCell().textContent = f.velocity || '-';
+        row.insertCell().textContent = new Date(f.timestamp * 1000).toLocaleString();
       });
+    });
+}
 
-    fetch("/stats")
-      .then(res => res.json())
-      .then(data => {
-        const ctx = document.getElementById('statsChart').getContext('2d');
-        new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: data.map(d => d.tag),
-            datasets: [{
-              label: 'Flüge pro Tag',
-              data: data.map(d => d.anzahl),
-              backgroundColor: '#1976d2'
-            }]
-          },
-          options: {
-            scales: { y: { beginAtZero: true } }
-          }
-        });
-      });
-  </script>
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371.0;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 0.539957;
+}
+
+function fetchOpenSky() {
+  fetch('/fetch-opensky').then(() => alert("OpenSky-Abfrage gestartet."));
+}
+
+function loadPlatzrunde() {
+  fetch('/platzrunde.gpx')
+    .then(res => res.text())
+    .then(txt => new DOMParser().parseFromString(txt, "text/xml"))
+    .then(data => {
+      let geojson = toGeoJSON.gpx(data);
+      L.geoJSON(geojson, {color: 'blue', dashArray: '4,4'}).addTo(map);
+    });
+}
+
+fetchFlights();
+loadPlatzrunde();
+setInterval(fetchFlights, 60000);
+</script>
 </body>
 </html>
