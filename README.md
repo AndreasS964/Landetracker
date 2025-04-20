@@ -1,91 +1,74 @@
-# 🛩️ Flugtracker v1.8
+# ✈️ Flugtracker v1.8
 
-Ein lokaler Flugtracker für Flugleiter und Spotter:  
-Erfasst Flugbewegungen über ADS-B (readsb oder adsb.lol), speichert sie lokal in SQLite und zeigt sie übersichtlich im Browser.
+Ein leichtgewichtiges, autarkes Tracking-System für Flugbewegungen rund um EDTW. Funktioniert ganz ohne Cloud, lokal auf einem Raspberry Pi mit SDR-Stick.
 
----
+## 🧰 Features
 
-## 🚀 Features
+- ADS-B Empfang über `readsb` (lokal)
+- Alternativ/Ausfallsicher: Online-Abruf via [`adsb.lol`](https://api.adsb.lol)
+- Speicherung der Flüge in SQLite
+- Darstellung auf Webkarte (Leaflet)
+- Filter für:
+  - Datum von–bis
+  - Bewegungsart (Anflug, Abflug, Platzrunde)
+  - Höhe / Radius / Geschwindigkeit
+- CSV/JSON Export & Statistikansicht
+- Platzrunde (.gpx)
+- Autostart & Watchdog über systemd
+- ✅ Kein Flask! Reiner HTTP-Server (Standardlib)
 
-- Lokale Datenbank aller empfangenen Flüge (`flugdaten.db`)
-- Anzeige auf interaktiver Karte (Leaflet)
-- Platzrunde als GPX-Overlay
-- Filter nach Anflug, Abflug, Radius, Zeitraum
-- Statistikdiagramm (Chart.js)
-- CSV/JSON-Export
-- Autostart via systemd
-- Logo + UI im Flugleiter-Stil
-- OpenSky entfernt → ersetzt durch **adsb.lol API**
-
----
-
-## 🔧 Installation
+## 🚀 Installation (Pi, clean)
 
 ```bash
 bash install_flighttracker.sh
 ```
 
-Das Skript installiert:
-- Systempakete (`git`, `sqlite3`, `rtl-sdr`, `python3`)
-- ADS-B Empfänger (`readsb`)
-- Projektcode aus GitHub
-- Platzrunde & Logo (falls vorhanden)
-- Systemd-Autostart
-
----
-
-## 🧪 Start (manuell)
+## 🔧 Manuell starten
 
 ```bash
-cd ~/Landetracker
-source venv-tracker/bin/activate
-python3 flighttracker.py
+python3 ~/Landetracker/flighttracker.py
 ```
 
-Weboberfläche unter:  
-👉 http://<IP-Adresse>:8083/
+## 🔁 Bewegungsarten
 
----
+- **Anflug**: unter 3200 ft und < 3 NM
+- **Abflug**: über 3200 ft und < 3 NM
+- **Platzrunde**: <= 5 NM mit niedriger Höhe & kurzem Abstand
 
-## 🌐 Datenquellen
+## 📦 Systemdienste
 
-### Lokal (Standard)
-- `readsb` mit JSON-Ausgabe unter `/run/readsb/aircraft.json`
+- `flighttracker.service` (Autostart & Watchdog)
+- `readsb.service` (ADS-B Empfänger)
+- DuckDNS (`duck.sh` via Cron alle 5 Minuten)
 
-### Online (Fallback/Ergänzung)
-- `https://api.adsb.lol/v2/aircraft?lat=...&lon=...&radius=...`
+## 📂 Verzeichnisstruktur
 
----
+| Datei                | Funktion                            |
+|----------------------|-------------------------------------|
+| `flighttracker.py`   | Hauptserver                         |
+| `index.html`         | Web-Frontend (Filter, Karte etc.)   |
+| `flugdaten.db`       | SQLite-Datenbank                    |
+| `tracker.log`        | Laufendes Logfile                   |
+| `platzrunde.gpx`     | Platzrunde-Datei (optional)         |
+| `logo.png`           | eigenes Logo (optional)             |
 
-## ✈️ Bewegungsarten
+## 📈 Statistikseite
 
-- **Anflug**: unter 3200 ft, innerhalb 3 NM
-- **Abflug**: über 3200 ft, innerhalb 3 NM
-- **Platzrunde**: innerhalb definierter GPX-Strecke
+Erreichbar über:
+```
+http://<raspi-ip>:8083/stats
+```
 
----
+## 📋 Loganzeige
 
-## 📂 Dateien
+Erreichbar über:
+```
+http://<raspi-ip>:8083/log
+```
 
-| Datei             | Beschreibung                    |
-|------------------|----------------------------------|
-| `flighttracker.py` | Haupt-Backend                   |
-| `index.html`       | UI im Flugleiter-Stil           |
-| `platzrunde.gpx`   | Platzrunde (optional)           |
-| `logo.png`         | Logo oben in der UI             |
-| `tracker.log`      | Logfile                         |
-| `install_flighttracker.sh` | Installer               |
+## 🌐 Links
 
----
-
-## 📡 Tar1090-Kompatibilität
-
-readsb schreibt nach `/run/readsb`, kompatibel mit tar1090.  
-Tar1090 läuft separat unter:  
-👉 http://<IP-Adresse>/tar1090
-
----
-
-## 🔐 Entwickler
-
-© 2025 Andreas Sika – Flugtracker powered by Enthusiasmus, Kaffee und `adsb.lol`
+- [adsb.lol API](https://api.adsb.lol/docs)
+- [readsb](https://github.com/wiedehopf/readsb)
+- [Leaflet JS](https://leafletjs.com/)
+- [DuckDNS](https://www.duckdns.org/)
