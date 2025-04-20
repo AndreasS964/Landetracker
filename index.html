@@ -5,7 +5,6 @@
   <title>Flugtracker v1.8</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { margin: 0; font-family: sans-serif; background: #eef2f5; }
     header {
@@ -28,8 +27,9 @@
       background: #e0e0e0;
       padding: 0.5rem;
       display: flex;
-      gap: 1rem;
       flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
     }
     #filters button {
       padding: 0.4rem 0.8rem;
@@ -43,8 +43,13 @@
       display: flex;
       height: 70vh;
     }
-    #map { flex: 2; }
-    #flights { flex: 1; overflow-y: auto; background: white; }
+    #map { flex: 3; }
+    #flights {
+      flex: 2;
+      overflow-y: auto;
+      background: white;
+      border-left: 1px solid #ccc;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td {
       padding: 0.5rem;
@@ -69,16 +74,21 @@
       <a href="/log">📄 Log</a>
       <a href="/stats">📊 Statistik</a>
       <a href="/platzrunde.gpx">📡 Platzrunde</a>
+      <a href="/tar1090">📟 tar1090</a>
+      <a href="/graphs1090">📈 Graphs</a>
     </nav>
   </header>
 
   <div id="filters">
-    <button>📅 Heute</button>
-    <button>📆 Woche</button>
-    <button>🛬 Anflug</button>
-    <button>🛫 Abflug</button>
-    <button>🔁 Platzrunde</button>
-    <button>📍 Radius: 3NM</button>
+    <button onclick="setFilter('today')">📅 Heute</button>
+    <button onclick="setFilter('week')">📆 Woche</button>
+    <button onclick="setFilter('arrival')">🛬 Anflug</button>
+    <button onclick="setFilter('departure')">🛫 Abflug</button>
+    <button onclick="setRadius(3)">🔁 Platzrunde</button>
+    <button onclick="setRadius(5)">📍 Radius: 5NM</button>
+    <button onclick="refreshData()">🔄 Aktualisieren</button>
+    <button onclick="downloadCSV()">💾 CSV</button>
+    <button onclick="fetchADSB()">🌐 ADS-B.lol</button>
   </div>
 
   <div id="main">
@@ -88,7 +98,7 @@
         <thead>
           <tr><th>Callsign</th><th>Typ</th><th>Alt</th><th>Speed</th><th>Zeit</th></tr>
         </thead>
-        <tbody><tr><td colspan="5">⏳ Lade Flugdaten...</td></tr></tbody>
+        <tbody id="flightTable"><tr><td colspan="5">⏳ Lade Flugdaten...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -103,6 +113,8 @@
       maxZoom: 18
     }).addTo(map);
 
+    let aircraftMarkers = [];
+
     fetch("/platzrunde.gpx")
       .then(res => res.text())
       .then(gpx => new window.DOMParser().parseFromString(gpx, "application/xml"))
@@ -116,28 +128,54 @@
         }
       });
 
-    fetch("/stats")
-      .then(res => res.json())
-      .then(data => {
-        const ctx = document.createElement('canvas');
-        ctx.id = "statsChart";
-        ctx.height = 100;
-        document.body.appendChild(ctx);
-        new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: data.map(d => d.tag),
-            datasets: [{
-              label: 'Flüge pro Tag',
-              data: data.map(d => d.anzahl),
-              backgroundColor: '#1976d2'
-            }]
-          },
-          options: {
-            scales: { y: { beginAtZero: true } }
-          }
+    function setFilter(type) {
+      console.log("Setze Filter:", type);
+    }
+    function setRadius(nm) {
+      console.log("Radius gesetzt auf:", nm);
+    }
+    function refreshData() {
+      fetch("/flights.json")
+        .then(res => res.json())
+        .then(data => {
+          // Tabelle aktualisieren
+          const tbody = document.getElementById("flightTable");
+          tbody.innerHTML = "";
+          data.forEach(f => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.alt}</td><td>${f.speed}</td><td>${f.time}</td>`;
+            tbody.appendChild(tr);
+          });
+
+          // Alte Marker entfernen
+          aircraftMarkers.forEach(m => map.removeLayer(m));
+          aircraftMarkers = [];
+
+          // Neue Marker setzen
+          data.forEach(f => {
+            if (f.lat && f.lon) {
+              const marker = L.marker([f.lat, f.lon], {
+                icon: L.divIcon({
+                  className: 'aircraft-icon',
+                  html: '✈️',
+                  iconSize: [24, 24],
+                  iconAnchor: [12, 12]
+                })
+              }).addTo(map);
+              marker.bindPopup(`${f.callsign}<br>${f.muster}<br>${f.alt} ft`);
+              aircraftMarkers.push(marker);
+            }
+          });
         });
-      });
+    }
+    function downloadCSV() {
+      window.location.href = "/export.csv";
+    }
+    function fetchADSB() {
+      fetch("/api/adsb").then(() => refreshData());
+    }
+    // Initialer Abruf
+    refreshData();
   </script>
 </body>
 </html>
