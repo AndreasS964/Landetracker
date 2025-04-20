@@ -19,6 +19,8 @@ try:
 except ImportError:
     def notify(msg): pass  # Fallback für Nicht-Systemd-Systeme
 
+os.chdir(os.path.dirname(__file__))  # Fix für Logging-Dateipfad
+
 # --- Konfiguration ---
 PORT = 8083
 DB_PATH = 'flugdaten.db'
@@ -222,7 +224,6 @@ if __name__ == '__main__':
     threading.Thread(target=cleanup_old_data, daemon=True).start()
     threading.Thread(target=watchdog_loop, daemon=True).start()
     threading.Thread(target=adsblol_loop, daemon=True).start()
-    os.chdir(os.path.dirname(__file__))
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
     try:
