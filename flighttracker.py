@@ -26,9 +26,9 @@ AIRCRAFT_CSV = 'aircraft_db.csv'
 EDTW_LAT = 48.27889122038788
 EDTW_LON = 8.42936618151063
 MAX_RADIUS_NM = 5
-VERSION = '1.7'
+VERSION = '1.8'
 FETCH_INTERVAL = 300
-OPENSKY_INTERVAL = 600
+ADSBL_API = "https://api.adsb.lol/v2/aircraft"
 CLEANUP_INTERVAL = 86400
 MAX_DATA_AGE = 180 * 86400
 WATCHDOG_INTERVAL = 60
@@ -121,27 +121,14 @@ def load_aircraft_db():
         logger.error(f"Fehler beim Einlesen der Musterliste: {e}")
     return db
 
-# --- Fetch Daten ---
-def fetch_and_store():
-    global aircraft_db
+# --- Platzrunde laden ---
+def load_platzrunde():
     try:
-        data = requests.get('http://127.0.0.1/data/aircraft.json', timeout=5).json()
-        ts = int(time.time())
-        rows = []
-        for ac in data.get('aircraft', []):
-            lat, lon, alt, vel = ac.get('lat'), ac.get('lon'), ac.get('alt_baro'), ac.get('gs')
-            if None in (lat, lon, alt): continue
-            if haversine(EDTW_LAT, EDTW_LON, lat, lon) <= MAX_RADIUS_NM:
-                cs = (ac.get('flight') or '').strip()
-                model = aircraft_db.get(ac.get('t') or '', 'Unbekannt')
-                rows.append((ac.get('hex'), cs, alt, vel, ts, model, lat, lon))
-        if rows:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.executemany('INSERT INTO flugdaten VALUES (?,?,?,?,?,?,?,?)', rows)
-                conn.commit()
-        logger.info(f"{len(rows)} neue Flüge gespeichert.")
+        with open(GPX_FILE, 'r', encoding='utf-8') as f:
+            return f.read()
     except Exception as e:
-        logger.error(f"Fehler bei fetch_and_store: {e}")
+        logger.warning(f"Platzrunde konnte nicht geladen werden: {e}")
+        return ""
 
 # --- Cleanup ---
 def cleanup_old_data():
@@ -156,42 +143,76 @@ def cleanup_old_data():
             logger.error(f"Fehler bei Datenbereinigung: {e}")
         time.sleep(CLEANUP_INTERVAL)
 
-# --- Platzrunde laden ---
-def load_platzrunde():
-    try:
-        with open(GPX_FILE, 'r', encoding='utf-8') as f:
-            return f.read()
-    except Exception as e:
-        logger.warning(f"Platzrunde konnte nicht geladen werden: {e}")
-        return ""
-
 # --- Watchdog Pinger ---
 def watchdog_loop():
     while True:
         notify("WATCHDOG=1")
         time.sleep(WATCHDOG_INTERVAL // 2)
 
-# --- OpenSky Abruf ---
-def fetch_opensky():
+# --- ADSB.lol Abruf ---
+def fetch_adsblol():
     try:
-        logger.info("OpenSky-Datenabruf gestartet...")
-        r = requests.get("https://opensky-network.org/api/states/all", timeout=10)
+        logger.info("adsb.lol-Datenabruf gestartet...")
+        url = f"{ADSBL_API}?lat={EDTW_LAT}&lon={EDTW_LON}&radius={MAX_RADIUS_NM}"
+        r = requests.get(url, timeout=10)
         if r.ok:
             data = r.json()
-            count = len(data.get("states", []))
-            logger.info(f"OpenSky-Daten erfolgreich abgerufen ({len(r.content)} Bytes, {count} Flieger)")
+            count = len(data.get("aircraft", []))
+            logger.info(f"adsb.lol-Daten erfolgreich abgerufen ({len(r.content)} Bytes, {count} Flieger)")
         else:
-            logger.warning(f"OpenSky-Antwortstatus: {r.status_code}")
+            logger.warning(f"adsb.lol-Antwortstatus: {r.status_code}")
     except Exception as e:
-        logger.error(f"Fehler beim OpenSky-Abruf: {e}")
+        logger.error(f"Fehler beim adsb.lol-Abruf: {e}")
 
-def opensky_loop():
+def adsblol_loop():
     while True:
-        fetch_opensky()
-        time.sleep(OPENSKY_INTERVAL)
+        fetch_adsblol()
+        time.sleep(FETCH_INTERVAL)
 
-# --- Dummy Handler ---
-class Handler(http.server.SimpleHTTPRequestHandler): pass
+# --- Statistikdaten ---
+def fetch_stats():
+    out = {}
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute("""
+                SELECT date(timestamp, 'unixepoch', 'localtime') AS tag, COUNT(*) AS anzahl
+                FROM flugdaten
+                GROUP BY tag
+                ORDER BY tag DESC
+                LIMIT 30
+            """)
+            out = [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Fehler bei Statistikabfrage: {e}")
+    return out
+
+# --- Webserver Handler ---
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/log":
+            content = '<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>'
+            content += '<br>'.join(html.escape(l) for l in log_lines[-100:])
+            content += '</pre><a href="/">Zurück</a></body></html>'
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
+        elif parsed.path == "/stats":
+            stats = fetch_stats()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(stats).encode("utf-8"))
+        elif parsed.path == "/platzrunde.gpx":
+            data = load_platzrunde()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/gpx+xml")
+            self.end_headers()
+            self.wfile.write(data.encode("utf-8"))
+        else:
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
 # --- Main ---
 if __name__ == '__main__':
@@ -199,9 +220,8 @@ if __name__ == '__main__':
     update_aircraft_db()
     aircraft_db = load_aircraft_db()
     threading.Thread(target=cleanup_old_data, daemon=True).start()
-    threading.Thread(target=fetch_and_store, daemon=True).start()
     threading.Thread(target=watchdog_loop, daemon=True).start()
-    threading.Thread(target=opensky_loop, daemon=True).start()
+    threading.Thread(target=adsblol_loop, daemon=True).start()
     os.chdir(os.path.dirname(__file__))
     logger.info(f"Starte Flugtracker v{VERSION} auf Port {PORT}...")
     print(f"✅ Flugtracker v{VERSION} läuft auf Port {PORT}")
