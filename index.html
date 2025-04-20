@@ -132,5 +132,14 @@ fetchFlights();
 loadPlatzrunde();
 setInterval(fetchFlights, 60000);
 </script>
+
+<script>
+  const host = window.location.hostname;
+  const tar = document.getElementById("link-tar");
+  const graph = document.getElementById("link-graph");
+  if (tar) tar.href = `http://${host}/tar1090`;
+  if (graph) graph.href = `http://${host}/graphs1090`;
+</script>
+
 </body>
 </html>

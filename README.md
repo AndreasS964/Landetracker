@@ -1,60 +1,61 @@
-![Flugtracker Logo](flugtracker_logo_final.png)
+<p align="center">
+  <img src="logo.png" alt="Flugtracker Logo" width="300"/>
+</p>
 
-# 🛩️ Flugtracker v1.9f
+# Flugtracker v1.7
 
-## 🔧 Funktionen
+Ein leichtgewichtiges ADS-B Tracking-Frontend für Flugleiter, Tower und private Plätze.
 
-- 📡 Empfängt Flugdaten über `readsb` oder OpenSky API
-- 💾 Speichert Flugdaten lokal in SQLite
-- 🗺️ Zeigt Flugbewegungen auf Leaflet-Karte
-- 📈 Tabelle mit Filter- und Sortierfunktionen
-- 🛬 Bewegungsart-Erkennung (Anflug / Abflug)
-- 🧭 Platzrunde über `platzrunde.gpx`
-- 📊 Statistiken: Landungen pro Tag (30 Tage)
-- 📁 CSV-Export der Tabelle
-- 🌐 OpenSky-Abruf (Platzhalter vorbereitet)
-- 🚀 Manueller Datenabruf mit „DB-Aktualisieren“-Button
-- ⏳ Zeitfilter mit Datum oder Dropdown
-- 🧭 Filter nach Callsign, Höhe, Radius, Bewegungsart
-- 📌 Zeigt standardmäßig letzte 7 Tage
+## ✈️ Funktionen
 
-## 📂 Dateien
+- Livekarte mit Filter für Callsign, Höhe, Radius, Zeit & Bewegungsart
+- Platzrundendarstellung (GPX)
+- Anflug- und Abflugerkennung (<3 NM & Höhenlogik)
+- CSV-Export & OpenSky-Datenabruf
+- Webansicht lokal oder über Lighttpd erreichbar (Port 80)
+- Autostart & Watchdog via systemd
 
-- `flighttracker.py` – Hauptserver mit SQLite, REST, Logging
-- `index.html` – Weboberfläche (ohne Flask, rein HTML/JS)
-- `platzrunde.gpx` – Platzrundenpfad für Leaflet
-- `aircraft_db.csv` – Typenliste (automatischer Abruf)
-
-## 🧭 Bewegungsart-Logik
-
-Jeder Flugdatensatz enthält:
-
-- `"arrival"` → Höhe < 2200 ft & Abstand < 3 NM
-- `"departure"` → Höhe > 3200 ft & Abstand < 3 NM
-- `""` → wenn nicht eindeutig
-
-Frontend-Filterbar über Dropdown.
-
-## 🖱️ Web-Oberfläche
-
-| Button              | Funktion                                      |
-|---------------------|-----------------------------------------------|
-| 🔄 Anzeigen         | Lädt und filtert Daten                        |
-| 📁 CSV              | Exportiert aktuelle Tabelle als CSV           |
-| 🌐 OpenSky          | Platzhalter (für geplante Anbindung)          |
-| 🚀 DB-Aktualisieren | Führt sofort Datenabruf via /refresh-now aus |
-
-## ⚙️ Installation
+## 🚀 Schnellstart
 
 ```bash
+cd ~
+rm -rf Landetracker
 git clone https://github.com/AndreasS964/Landetracker.git
 cd Landetracker
 bash install_flighttracker.sh
-source venv-tracker/bin/activate
-python3 flighttracker.py
 ```
 
-## 👤 Version
+Dann im Browser aufrufen:
 
-**v1.9f** – entwickelt für Flugleiter und Platzüberwachung  
-**by Andreas Sika**
+```bash
+http://<IP-des-RaspberryPi>/index.html
+```
+
+## 🔄 Webzugriff
+
+Das Frontend wird automatisch nach `/var/www/html/` kopiert und ist über Port 80 erreichbar.
+
+## 📦 Autostart
+
+Nach der Installation automatisch über `systemd` aktiv:
+
+```bash
+sudo systemctl status flighttracker
+```
+
+## 📁 Struktur
+
+- `flighttracker.py` – Server & Datenlogger
+- `index.html` – Web-Frontend (Filter, Karte, Tabelle, Buttons)
+- `platzrunde.gpx` – GPX-Datei für Platzrunde
+- `logo.png` – eingebunden im Banner und README
+
+## 🧩 Erweiterungen geplant
+
+- Mustererkennung (z. B. Platzrunden automatisch klassifizieren)
+- Diagramme, Heatmap, Besucherhäufigkeit
+- Authentifizierung, Pilotenlogbuch
+
+---
+
+(c) Andreas Sika · v1.7

@@ -1,85 +1,69 @@
 #!/bin/bash
 
-echo "📦 Starte vollständige Installation für Flighttracker v1.9h"
+echo "📦 Starte vollständige Installation für Flighttracker v1.7"
 
+# Systempakete installieren
 echo "🔧 Pakete installieren..."
-sudo apt update
-sudo apt upgrade -y
-sudo apt install -y git python3-full python3-venv build-essential pkg-config curl \
-libzstd-dev librtlsdr-dev rtl-sdr libusb-1.0-0-dev sqlite3
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git python3-full python3-venv python3-pip build-essential pkg-config curl \
+                    rtl-sdr librtlsdr-dev sqlite3 lighttpd
 
-echo "⚙️ DVB-T Treiber blockieren (falls aktiv)..."
-echo "blacklist dvb_usb_rtl28xxu" | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
-sudo rmmod dvb_usb_rtl28xxu 2>/dev/null || true
+# Blockiere Kernel-Modul für DVB-T
+sudo bash -c 'echo "blacklist dvb_usb_rtl28xxu" > /etc/modprobe.d/blacklist-rtl.conf'
+sudo modprobe -r dvb_usb_rtl28xxu || true
 
-echo "📡 Installiere readsb..."
-bash <(curl -s https://raw.githubusercontent.com/wiedehopf/adsb-scripts/master/readsb-install.sh)
+# readsb installieren (falls nicht vorhanden)
+if ! [ -x "$(command -v readsb)" ]; then
+  echo "📡 Installiere readsb..."
+  sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
+fi
 
-echo "🗺️ Installiere tar1090..."
-bash <(curl -s https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)
+# Projektverzeichnis vorbereiten
+cd ~/Landetracker || { echo "❌ Landetracker-Verzeichnis fehlt!"; exit 1; }
 
-echo "📊 Installiere graphs1090..."
-bash <(curl -s https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)
-
-echo "📥 Lade Projekt von GitHub..."
-cd ~
-rm -rf Landetracker
-git clone https://github.com/AndreasS964/Landetracker.git
-cd Landetracker
-
-echo "🐍 Erstelle virtuelle Umgebung..."
+# Python-Venv einrichten
+echo "🐍 Python-Umgebung einrichten..."
 python3 -m venv venv-tracker
 source venv-tracker/bin/activate
-pip install --upgrade pip
-pip install requests
+pip install -r requirements.txt || pip install requests
 
-echo "✅ Installation abgeschlossen!"
-echo "👉 Starte mit: source venv-tracker/bin/activate && python3 flighttracker.py"
-
+# Systemd-Dienst anlegen
 echo "🚀 Autostart-Dienst für Flighttracker einrichten..."
-
-cat <<EOF | sudo tee /etc/systemd/system/flighttracker.service >/dev/null
+sudo tee /etc/systemd/system/flighttracker.service >/dev/null <<EOF
 [Unit]
-Description=Flighttracker Service
+Description=Flighttracker v1.7
 After=network.target
 
 [Service]
-Type=simple
-WorkingDirectory=/home/pi/Landetracker
 ExecStart=/home/pi/Landetracker/venv-tracker/bin/python3 /home/pi/Landetracker/flighttracker.py
+WorkingDirectory=/home/pi/Landetracker
+StandardOutput=journal
+StandardError=journal
 Restart=always
+RestartSec=10
 User=pi
+Environment="PYTHONUNBUFFERED=1"
+WatchdogSec=60
+NotifyAccess=all
+Type=simple
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+sudo systemctl daemon-reexec
 sudo systemctl daemon-reload
 sudo systemctl enable flighttracker.service
-sudo systemctl restart flighttracker.service
-echo "✅ Autostart-Dienst eingerichtet!"
 
-echo "🌐 Lighttpd-Konfiguration prüfen/anpassen..."
+# Lighttpd-Konfiguration prüfen und HTML bereitstellen
+echo "🌐 Lighttpd-Webzugriff konfigurieren..."
+sudo mkdir -p /var/www/html
+sudo cp -f index.html /var/www/html/
+sudo cp -f logo.png /var/www/html/
+sudo chown www-data:www-data /var/www/html/index.html /var/www/html/logo.png
+sudo chmod 644 /var/www/html/index.html /var/www/html/logo.png
+sudo systemctl restart lighttpd
+echo "✅ Webfrontend erreichbar unter: http://<IP>/index.html"
 
-# Backup der bestehenden Config
-if [ -f /etc/lighttpd/lighttpd.conf ]; then
-    sudo cp /etc/lighttpd/lighttpd.conf /etc/lighttpd/lighttpd.conf.bak
-fi
-
-# Alias ergänzen (wenn nicht schon vorhanden)
-if ! grep -q "landetracker" /etc/lighttpd/lighttpd.conf; then
-    cat <<EOL | sudo tee -a /etc/lighttpd/lighttpd.conf >/dev/null
-
-server.modules += ( "mod_alias", "mod_redirect", "mod_access" )
-
-alias.url += ( "/landetracker" => "/home/pi/Landetracker/web" )
-
-\$HTTP["url"] =~ "^/landetracker" {
-    dir-listing.activate = "enable"
-    url.access-deny = ( )
-}
-EOL
-fi
-
-# Konfiguration testen
-sudo lighttpd -tt && sudo systemctl restart lighttpd && echo "✅ Lighttpd läuft mit Web-Zugriff auf /landetracker" || echo "❌ Lighttpd-Konfiguration fehlerhaft!"
+echo "✅ Installation abgeschlossen!"
+echo "👉 Starte mit: source venv-tracker/bin/activate && python3 flighttracker.py"
