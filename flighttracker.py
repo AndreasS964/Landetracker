@@ -47,7 +47,6 @@ def load_settings():
 
 settings = load_settings()
 current_radius_nm = settings.get("radius_nm", 5)
-
 log_lines = []
 class WebLogHandler(logging.Handler):
     def emit(self, record):
