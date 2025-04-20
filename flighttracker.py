@@ -66,9 +66,18 @@ def haversine(lat1, lon1, lat2, lon2):
 # --- Init DB ---
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS flugdaten (hex TEXT, callsign TEXT, baro_altitude REAL, velocity REAL, timestamp INTEGER, muster TEXT, lat REAL, lon REAL)"
-        )
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS flugdaten (
+                hex TEXT,
+                callsign TEXT,
+                baro_altitude REAL,
+                velocity REAL,
+                timestamp INTEGER,
+                muster TEXT,
+                lat REAL,
+                lon REAL
+            )
+        ''')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_time ON flugdaten(timestamp)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_coords ON flugdaten(lat, lon)')
         conn.commit()
@@ -116,7 +125,7 @@ def load_aircraft_db():
 def fetch_and_store():
     global aircraft_db
     try:
-        data = requests.get('http://127.0.0.1:8080/data.json', timeout=5).json()
+        data = requests.get('http://127.0.0.1/data/aircraft.json', timeout=5).json()
         ts = int(time.time())
         rows = []
         for ac in data.get('aircraft', []):
@@ -162,7 +171,7 @@ def watchdog_loop():
         notify("WATCHDOG=1")
         time.sleep(WATCHDOG_INTERVAL // 2)
 
-# --- OpenSky ---
+# --- OpenSky Abruf ---
 def fetch_opensky():
     try:
         logger.info("OpenSky-Datenabruf gestartet...")
@@ -181,7 +190,7 @@ def opensky_loop():
         fetch_opensky()
         time.sleep(OPENSKY_INTERVAL)
 
-# Dummy Handler
+# --- Dummy Handler ---
 class Handler(http.server.SimpleHTTPRequestHandler): pass
 
 # --- Main ---
