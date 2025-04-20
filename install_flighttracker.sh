@@ -21,6 +21,12 @@ source venv-tracker/bin/activate
 pip install --upgrade pip
 pip install requests
 
+echo "📄 Neue index.html anwenden (falls vorhanden)..."
+if [ -f index.html ]; then
+  cp -f index.html index.html.bak 2>/dev/null
+  wget -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
+fi
+
 echo "📡 readsb installieren..."
 sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
 
