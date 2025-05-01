@@ -143,13 +143,38 @@ def cleanup_old_data():
 def fetch_adsblol():
     try:
         logger.info("adsb.lol-Datenabruf gestartet...")
-        url = f"https://api.adsb.lol/v2/lat/{EDTW_LAT}/lon/{EDTW_LON}/dist/5"
+        url = f"https://api.adsb.lol/v2/lat/{EDTW_LAT}/lon/{EDTW_LON}/dist/25"
         r = requests.get(url, timeout=10)
         if r.ok:
-            logger.info(f"adsb.lol-Daten erfolgreich geladen: {len(r.content)} Bytes")
+            data = r.json().get("aircraft", [])
+            count = 0
+            with sqlite3.connect(DB_PATH) as conn:
+                for f in data:
+                    if not f.get("hex") or not f.get("lat") or not f.get("lon"):
+                        continue
+                    flight = {
+                        "hex": f.get("hex", "").upper(),
+                        "callsign": f.get("flight", "").strip(),
+                        "baro_altitude": f.get("alt_baro", 0),
+                        "velocity": f.get("gs", 0),
+                        "timestamp": int(time.time()),
+                        "lat": f.get("lat"),
+                        "lon": f.get("lon"),
+                        "type": f.get("t", "")
+                    }
+                    flight["muster"] = bestimme_muster(flight, readsb_db, aircraft_db)
+                    try:
+                        conn.execute('''INSERT INTO flugdaten (hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                                     (flight["hex"], flight["callsign"], flight["baro_altitude"], flight["velocity"],
+                                      flight["timestamp"], flight["muster"], flight["lat"], flight["lon"]))
+                        count += 1
+                    except Exception as e:
+                        logger.warning(f"Eintrag übersprungen: {e}")
+                conn.commit()
+            logger.info(f"{count} Flugdaten gespeichert.")
         else:
             logger.warning(f"adsb.lol-Antwort: {r.status_code}")
-    except Exception as e:
         logger.error(f"Fehler bei adsb.lol-Abruf: {e}")
 
 def adsblol_loop():
@@ -214,4 +239,3 @@ if __name__ == '__main__':
         httpd.serve_forever()
     except Exception as e:
         logger.critical(f"HTTP-Server abgestürzt: {e}")
-
