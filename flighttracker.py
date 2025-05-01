@@ -1,4 +1,4 @@
-# flighttracker.py – vollständiger Stand mit Log & Statistik
+ # flighttracker.py – vollständiger Stand mit Log & Statistik
 
 import http.server
 import builtins
@@ -118,6 +118,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(content.encode("utf-8"))
+            return
+        elif parsed.path == "/api/adsb":
+            fetch_adsblol()
+            self.send_response(200)
+            self.end_headers()
         elif parsed.path == "/stats":
             stats = fetch_stats()
             self.send_response(200)
