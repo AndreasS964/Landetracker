@@ -1,4 +1,4 @@
-# flighttracker_stats_html.py – aktualisierte Version mit Chart.js-Statistikseite unter /stats
+# flighttracker_stats_html.py – aktualisierte Version mit Chart.js-Statistikseite unter /stats und abgeschwächter Muster-Filter für adsb.lol
 
 import http.server
 import builtins
@@ -176,8 +176,9 @@ def fetch_adsblol():
                     }
                     flight["muster"] = bestimme_muster(flight, readsb_db, aircraft_db)
                     if not flight["muster"]:
-                        continue
+                        flight["muster"] = "?"
                     try:
+                        logger.debug(f"Speichere Flug: {flight}")
                         conn.execute('''INSERT INTO flugdaten (hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                                      (flight["hex"], flight["callsign"], flight["baro_altitude"], flight["velocity"],
@@ -253,4 +254,3 @@ if __name__ == '__main__':
             httpd.serve_forever()
     except Exception as e:
         logger.critical(f"HTTP-Server abgestürzt: {e}")
-
