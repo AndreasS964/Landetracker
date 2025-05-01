@@ -76,9 +76,8 @@
     <nav>
       <a href="/log">📄 Log</a>
       <a href="/stats">📊 Statistik</a>
-      <a href="/platzrunde.gpx">📡 Platzrunde</a>
-      <a href="http://localhost/tar1090">📟 tar1090</a>
-      <a href="http://localhost/graphs1090">📈 Graphs</a>
+            <a href="/tar1090">📟 tar1090</a>
+      <a href="/graphs1090">📈 Graphs</a>
     </nav>
   </header>
 
@@ -172,6 +171,7 @@
       fetch("/flights.json")
         .then(res => res.json())
         .then(data => {
+          console.log("📦 Flugdaten geladen:", data);
           const from = document.getElementById("from").value;
           const to = document.getElementById("to").value;
           const tbody = document.getElementById("flightTable");
@@ -180,7 +180,7 @@
             const ts = new Date(f.timestamp * 1000);
             const matchDate = (!from || ts >= new Date(from)) && (!to || ts <= new Date(to + "T23:59:59"));
             const matchRadius = typeof f.dist !== 'number' || f.dist <= currentRadius;
-            const matchType = !filterType || f.typ === filterType;
+            const matchType = !filterType || f.type === filterType || f.typ === filterType;
             return matchDate && matchRadius && matchType;
           });
           filtered.forEach(f => {
