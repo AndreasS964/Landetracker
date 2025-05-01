@@ -71,6 +71,8 @@ server {
     server_name _;
     root $WWW_DIR;
 
+    include /usr/share/graphs1090/nginx-graphs1090.conf;
+
     location / {
         index index.html;
         try_files \$uri \$uri/ =404;
@@ -92,15 +94,14 @@ cat <<EOF > /usr/local/bin/flugtracker-start
 #!/bin/bash
 ENABLE_DEBUG=true
 cd "$INSTALL_DIR"
-CMD="python3 tracker.py --db \"$DB_DIR/flights.db\" --log \"$LOG_DIR/tracker.log\""
-# Falls Debuglog nicht schreibbar, umleiten auf /dev/null
-if [ "$ENABLE_DEBUG" = true ] && [ -w "$DEBUG_LOG" ]; then
-  CMD+=" --debug >> \"$DEBUG_LOG\" 2>&1"
-elif [ "$ENABLE_DEBUG" = true ]; then
-  CMD+=" --debug >> /dev/null 2>&1"
-fi
 
-eval $CMD
+if [ "\$ENABLE_DEBUG" = true ] && [ -w "$DEBUG_LOG" ]; then
+  exec python3 tracker.py --db "$DB_DIR/flights.db" --log "$LOG_DIR/tracker.log" --debug >> "$DEBUG_LOG" 2>&1
+elif [ "\$ENABLE_DEBUG" = true ]; then
+  exec python3 tracker.py --db "$DB_DIR/flights.db" --log "$LOG_DIR/tracker.log" --debug >> /dev/null 2>&1
+else
+  exec python3 tracker.py --db "$DB_DIR/flights.db" --log "$LOG_DIR/tracker.log"
+fi
 EOF
 chmod +x /usr/local/bin/flugtracker-start
 
