@@ -17,6 +17,7 @@ ENABLE_DEBUG=true
 
 # Abhängigkeiten
 apt update
+apt remove -y lighttpd || true
 apt install -y git nginx sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren (nur wenn NICHT bereits installiert)
@@ -89,6 +90,7 @@ chmod 644 "$CRON_FILE"
 # Startskript
 cat <<EOF > /usr/local/bin/flugtracker-start
 #!/bin/bash
+ENABLE_DEBUG=true
 cd "$INSTALL_DIR"
 CMD="python3 tracker.py --db \"$DB_DIR/flights.db\" --log \"$LOG_DIR/tracker.log\""
 # Falls Debuglog nicht schreibbar, umleiten auf /dev/null
