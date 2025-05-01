@@ -1,4 +1,4 @@
- # flighttracker.py – vollständiger Stand mit Log & Statistik
+# flighttracker.py – vollständiger Stand mit Log & Statistik
 
 import http.server
 import builtins
@@ -17,22 +17,31 @@ import logging
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse, parse_qs
 from datetime import datetime
+from collections import deque
 
 PORT = 8083
-DB_PATH = 'flugdaten.db'
+DB_PATH = '/var/lib/flugtracker/flugdaten.db'
 EDTW_LAT = 48.27889122038788
 EDTW_LON = 8.42936618151063
 
-log_lines = []
+log_lines = deque(maxlen=1000)
 logger = logging.getLogger("tracker")
 logger.setLevel(logging.INFO)
-fh = RotatingFileHandler("tracker.log", maxBytes=2_000_000, backupCount=3)
+fh = RotatingFileHandler("/var/log/flugtracker/tracker.log", maxBytes=2_000_000, backupCount=3)
 fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 wh = logging.StreamHandler()
 wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(fh)
 logger.addHandler(wh)
 
+# Web-Log-Handler
+class WebLogHandler(logging.Handler):
+    def emit(self, record):
+        msg = self.format(record)
+        log_lines.append(msg)
+logger.addHandler(WebLogHandler())
+
+# --- Hilfsfunktionen ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -64,15 +73,7 @@ def fetch_stats():
         logger.error(f"Fehler bei Statistikabfrage: {e}")
     return {k: [dict(r) for r in v] for k, v in out.items()}
 
-class WebLogHandler(logging.Handler):
-    def emit(self, record):
-        msg = self.format(record)
-        log_lines.append(msg)
-        if len(log_lines) > 1000:
-            log_lines.pop(0)
-
-logger.addHandler(WebLogHandler())
-
+# --- HTTP-Handler ---
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -112,13 +113,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(500, str(e))
         elif parsed.path == "/log":
             content = '<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>'
-            content += '<br>'.join(html.escape(l) for l in log_lines[-100:])
+            content += '<br>'.join(html.escape(l) for l in list(log_lines)[-100:])
             content += '</pre><a href="/">Zurück</a></body></html>'
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(content.encode("utf-8"))
-            return
         elif parsed.path == "/api/adsb":
             fetch_adsblol()
             self.send_response(200)
@@ -132,7 +132,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         else:
             return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
-# --- Zusatzfunktionen ---
+# --- Hintergrundprozesse ---
 def cleanup_old_data():
     while True:
         try:
@@ -168,6 +168,8 @@ def fetch_adsblol():
                         "type": f.get("t", "")
                     }
                     flight["muster"] = bestimme_muster(flight, readsb_db, aircraft_db)
+                    if not flight["muster"]:
+                        continue
                     try:
                         conn.execute('''INSERT INTO flugdaten (hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon)
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
@@ -238,11 +240,10 @@ if __name__ == '__main__':
         aircraft_db = load_aircraft_db()
         readsb_db = load_readsb_db()
 
-        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        with socketserver.ThreadingTCPServer(("", PORT), Handler) as httpd:
             threading.Thread(target=cleanup_old_data, daemon=True).start()
             threading.Thread(target=adsblol_loop, daemon=True).start()
             threading.Thread(target=watchdog_loop, daemon=True).start()
             httpd.serve_forever()
     except Exception as e:
         logger.critical(f"HTTP-Server abgestürzt: {e}")
-
