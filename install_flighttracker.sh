@@ -12,7 +12,7 @@ cd ~/Landetracker
 
 # 🧰 Systempakete
 sudo apt update
-sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl netcat lighttpd
+sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl netcat-openbsd lighttpd
 
 # 🧹 RTL-Treiber blockieren
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
@@ -77,4 +77,5 @@ echo "🌍 Weboberfläche unter: http://<pi-ip>:8083 oder via Lighttpd"
 
 # 🧪 Systemprüfung
 bash ~/Landetracker/check_system.sh
+
 
