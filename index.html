@@ -1,256 +1,249 @@
-# flighttracker_stats_html.py – aktualisierte Version mit Chart.js-Statistikseite unter /stats und abgeschwächter Muster-Filter für adsb.lol
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Flugtracker Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      background: #f4f7fc;
+    }
+    header {
+      background: #002d5a;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header img {
+      height: 80px;
+      margin-right: 1rem;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      margin: 0;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-left: 1rem;
+      font-weight: 500;
+    }
+    #filters {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #e8eef7;
+      padding: 1rem 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    #filters label {
+      font-weight: bold;
+    }
+    #filters input, #filters button {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    #filters button {
+      background: #fff;
+      cursor: pointer;
+    }
+    #filters button:hover {
+      background: #ddeeff;
+    }
+    #main {
+      display: flex;
+      padding: 1rem 2rem;
+      gap: 1rem;
+    }
+    #map, #flights {
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    #map {
+      flex: 3;
+      min-height: 75vh;
+      border: 2px solid #002d5a;
+    }
+    #flights {
+      flex: 2;
+      background: white;
+      overflow-y: auto;
+      border-left: 1px solid #ccc;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 0.6rem;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #f0f2f5;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    footer {
+      background: #002d5a;
+      color: white;
+      text-align: center;
+      padding: 0.9rem;
+      font-size: 0.85rem;
+    }
+    .aircraft-icon div {
+      transform-origin: center center;
+      font-size: 22px;
+      transition: transform 0.5s linear;
+    }
+    #status {
+      text-align: center;
+      font-size: 0.9rem;
+      padding: 0.5rem 2rem;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div style="display: flex; align-items: center;">
+    <img src="logo.png" alt="Logo" />
+    <h1>Flugtracker Dashboard</h1>
+  </div>
+  <nav>
+    <a href="/log">📄 Log</a>
+    <a href="/stats">📊 Statistik</a>
+    <a href="/tar1090">📟 tar1090</a>
+    <a href="/graphs1090">📈 Graphs</a>
+  </nav>
+</header>
 
-import http.server
-import builtins
-import socketserver
-import sqlite3
-import requests
-import time
-import math
-import csv
-import json
-import html
-import threading
-import sys
-import os
-import logging
-from logging.handlers import RotatingFileHandler
-from urllib.parse import urlparse, parse_qs
-from datetime import datetime
-from collections import deque
+<div id="filters">
+  <label>Von: <input type="date" id="from"></label>
+  <label>Bis: <input type="date" id="to"></label>
+  <label>Höhe max: <input type="number" id="altitude" placeholder="z.B. 5000" style="max-width: 100px;"></label>
+  <label>Radius NM: <input type="number" id="radius" value="25" min="1" max="50"></label>
+  <button onclick="applyRadius()">📍 Radius</button>
+  <button onclick="refreshData()">🔄 Daten</button>
+  <button onclick="toggleHeatmap()">🔥 Heatmap</button>
+  <button onclick="downloadCSV()">💾 CSV</button>
+  <button onclick="fetchADSB()">🛰️ adsb.lol</button>
+</div>
 
-PORT = 8083
-DB_PATH = '/var/lib/flugtracker/flugdaten.db'
-EDTW_LAT = 48.27889122038788
-EDTW_LON = 8.42936618151063
+<div id="main">
+  <div id="map"></div>
+  <div id="flights">
+    <table>
+      <thead><tr><th>Callsign</th><th>Typ</th><th>Alt</th><th>Speed</th><th>Zeit</th></tr></thead>
+      <tbody id="flightTable"></tbody>
+    </table>
+  </div>
+</div>
 
-log_lines = deque(maxlen=1000)
-logger = logging.getLogger("tracker")
-logger.setLevel(logging.INFO)
-fh = RotatingFileHandler("/var/log/flugtracker/tracker.log", maxBytes=2_000_000, backupCount=3)
-fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-wh = logging.StreamHandler()
-wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.addHandler(fh)
-logger.addHandler(wh)
+<div id="status" style="position: absolute; right: 2rem; top: 1rem; font-size: 0.95rem; font-weight: 500; color: #ccc;"></div>
 
-class WebLogHandler(logging.Handler):
-    def emit(self, record):
-        msg = self.format(record)
-        log_lines.append(msg)
-logger.addHandler(WebLogHandler())
+<footer>powered by Andreas Sika – Flugtracker v2.0 © 2025</footer>
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c * 0.539957
+<script>
+  const map = L.map('map').setView([48.2789, 8.4293], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+  let aircraftMarkers = [];
+  let currentRadius = 25;
+  let heatLayer = null;
 
-def fetch_stats():
-    out = {}
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            out["landungen"] = conn.execute("""
-                SELECT date(timestamp, 'unixepoch', 'localtime') AS tag, COUNT(*) AS anzahl
-                FROM flugdaten
-                GROUP BY tag ORDER BY tag DESC LIMIT 30
-            """).fetchall()
-            out["muster"] = conn.execute("""
-                SELECT muster, COUNT(*) AS anzahl FROM flugdaten
-                GROUP BY muster ORDER BY anzahl DESC LIMIT 10
-            """).fetchall()
-            out["stunden"] = conn.execute("""
-                SELECT strftime('%H', timestamp, 'unixepoch', 'localtime') AS stunde, COUNT(*) AS anzahl
-                FROM flugdaten GROUP BY stunde ORDER BY stunde
-            """).fetchall()
-    except Exception as e:
-        logger.error(f"Fehler bei Statistikabfrage: {e}")
-    return {k: [dict(r) for r in v] for k, v in out.items()}
+  function toggleHeatmap() {
+    if (heatLayer) {
+      map.removeLayer(heatLayer);
+      heatLayer = null;
+    } else {
+      fetch("/heatmap.json")
+        .then(res => res.json())
+        .then(points => {
+          heatLayer = L.heatLayer(points, {
+            radius: 20,
+            blur: 15,
+            maxZoom: 17,
+          }).addTo(map);
+        });
+    }
+  }
 
-class Handler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        if parsed.path == "/flights.json":
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.row_factory = sqlite3.Row
-                    cursor = conn.execute("SELECT * FROM flugdaten ORDER BY timestamp DESC LIMIT 500")
-                    daten = []
-                    for row in cursor.fetchall():
-                        d = dict(row)
-                        if d.get("lat") and d.get("lon"):
-                            d["dist"] = round(haversine(d["lat"], d["lon"], EDTW_LAT, EDTW_LON), 2)
-                        daten.append(d)
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps(daten).encode("utf-8"))
-            except Exception as e:
-                logger.error(f"Fehler bei flights.json: {e}")
-                self.send_error(500, str(e))
-        elif parsed.path == "/export.csv":
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.row_factory = sqlite3.Row
-                    cursor = conn.execute("SELECT * FROM flugdaten ORDER BY timestamp DESC LIMIT 500")
-                    daten = [dict(row) for row in cursor.fetchall()]
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/csv")
-                    self.send_header("Content-Disposition", "attachment; filename=flugdaten.csv")
-                    self.end_headers()
-                    writer = csv.DictWriter(self.wfile, fieldnames=daten[0].keys())
-                    writer.writeheader()
-                    writer.writerows(daten)
-            except Exception as e:
-                logger.error(f"Fehler bei CSV-Export: {e}")
-                self.send_error(500, str(e))
-        elif parsed.path == "/log":
-            content = '<html><head><meta charset="utf-8"><title>Log</title></head><body><h2>Log</h2><pre>'
-            content += '<br>'.join(html.escape(l) for l in list(log_lines)[-100:])
-            content += '</pre><a href="/">Zurück</a></body></html>'
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(content.encode("utf-8"))
-        elif parsed.path == "/api/adsb":
-            fetch_adsblol()
-            self.send_response(200)
-            self.end_headers()
-        elif parsed.path == "/stats":
-            try:
-                with open("stats.html", "r", encoding="utf-8") as f:
-                    content = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(content.encode("utf-8"))
-            except Exception as e:
-                logger.error(f"Fehler beim Laden von stats.html: {e}")
-                self.send_error(500, str(e))
-        elif parsed.path == "/stats.json":
-            stats = fetch_stats()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(stats).encode("utf-8"))
-        else:
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+  function setDefaultDates() {
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("from").value = today;
+    document.getElementById("to").value = today;
+  }
 
-def cleanup_old_data():
-    while True:
-        try:
-            cutoff = int(time.time()) - 180 * 86400
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute('DELETE FROM flugdaten WHERE timestamp < ?', (cutoff,))
-                conn.commit()
-            logger.info("Datenbereinigung abgeschlossen.")
-        except Exception as e:
-            logger.error(f"Fehler bei Datenbereinigung: {e}")
-        time.sleep(86400)
+  function applyRadius() {
+    currentRadius = parseInt(document.getElementById("radius").value);
+    refreshData();
+  }
 
-def fetch_adsblol():
-    try:
-        logger.info("adsb.lol-Datenabruf gestartet...")
-        url = f"https://api.adsb.lol/v2/lat/{EDTW_LAT}/lon/{EDTW_LON}/dist/25"
-        r = requests.get(url, timeout=10)
-        if r.ok:
-            data = r.json().get("aircraft", [])
-            count = 0
-            with sqlite3.connect(DB_PATH) as conn:
-                for f in data:
-                    if not f.get("hex") or not f.get("lat") or not f.get("lon"):
-                        continue
-                    flight = {
-                        "hex": f.get("hex", "").upper(),
-                        "callsign": f.get("flight", "").strip(),
-                        "baro_altitude": f.get("alt_baro", 0),
-                        "velocity": f.get("gs", 0),
-                        "timestamp": int(time.time()),
-                        "lat": f.get("lat"),
-                        "lon": f.get("lon"),
-                        "type": f.get("t", "")
-                    }
-                    flight["muster"] = bestimme_muster(flight, readsb_db, aircraft_db)
-                    if not flight["muster"]:
-                        flight["muster"] = "?"
-                    try:
-                        logger.debug(f"Speichere Flug: {flight}")
-                        conn.execute('''INSERT INTO flugdaten (hex, callsign, baro_altitude, velocity, timestamp, muster, lat, lon)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                                     (flight["hex"], flight["callsign"], flight["baro_altitude"], flight["velocity"],
-                                      flight["timestamp"], flight["muster"], flight["lat"], flight["lon"]))
-                        count += 1
-                    except Exception as e:
-                        logger.warning(f"Eintrag übersprungen: {e}")
-                conn.commit()
-            logger.info(f"{count} Flugdaten gespeichert.")
-        else:
-            logger.warning(f"adsb.lol-Antwort: {r.status_code}")
-    except Exception as e:
-        logger.error(f"Fehler bei adsb.lol-Abruf: {e}")
+  function refreshData() {
+    fetch("/flights.json").then(res => res.json()).then(data => {
+      const from = document.getElementById("from").value;
+      const to = document.getElementById("to").value;
+      const maxAlt = parseInt(document.getElementById("altitude").value);
+      const tbody = document.getElementById("flightTable");
+      tbody.innerHTML = "";
 
-def adsblol_loop():
-    while True:
-        try:
-            fetch_adsblol()
-        except Exception as e:
-            logger.warning(f"adsblol_loop-Fehler: {e}")
-        time.sleep(300)
+      const filtered = data.filter(f => {
+        const ts = new Date(f.timestamp * 1000);
+        return (!from || ts >= new Date(from)) &&
+               (!to || ts <= new Date(to + "T23:59:59")) &&
+               (typeof f.dist !== 'number' || f.dist <= currentRadius) &&
+               (!maxAlt || f.baro_altitude <= maxAlt);
+      });
 
-AIRCRAFT_CSV = 'aircraft_db.csv'
-READSB_DB_PATH = "/run/readsb/aircraft.json"
+      document.getElementById("status").innerText = `${filtered.length} Bewegungen – letzte: ${filtered[0]?.callsign || '–'} (${new Date(filtered[0]?.timestamp * 1000).toLocaleTimeString()})`;
 
-def load_aircraft_db():
-    db = {}
-    try:
-        with open(AIRCRAFT_CSV, newline='', encoding='utf-8') as f:
-            for r in csv.DictReader(f):
-                db[r['icao'].strip().upper()] = r['model'].strip()
-        logger.info(f"Musterliste geladen: {len(db)} Typen")
-    except Exception as e:
-        logger.warning("aircraft_db.csv nicht gefunden – nutze nur readsb.")
-    return db
+      filtered.forEach(f => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.baro_altitude}</td><td>${f.velocity}</td><td>${new Date(f.timestamp * 1000).toLocaleString()}</td>`;
+        tbody.appendChild(tr);
+      });
 
-def load_readsb_db():
-    try:
-        with open(READSB_DB_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"readsb aircraft.json nicht gefunden oder fehlerhaft: {e}")
-        return {}
+      aircraftMarkers.forEach(m => map.removeLayer(m));
+      aircraftMarkers = [];
+      filtered.forEach(f => {
+        if (f.lat && f.lon) {
+          const marker = L.marker([f.lat, f.lon], {
+            icon: L.divIcon({
+              className: 'aircraft-icon',
+              html: `<div style="transform: rotate(${f.track || 0}deg)">➤</div>`
+            })
+          }).addTo(map);
+          marker.bindTooltip(`✈️ ${f.callsign || ''}<br>Typ: ${f.muster || '-'}<br>Alt: ${f.baro_altitude} ft<br>Speed: ${f.velocity} kt<br>${new Date(f.timestamp * 1000).toLocaleTimeString()}`, { direction: 'top', offset: [0, -12], opacity: 0.85 }).openTooltip();
+          aircraftMarkers.push(marker);
+        }
+      });
+    });
+  }
 
-def bestimme_muster(flight, readsb_db, aircraft_db):
-    icao = flight.get("hex", "").upper()
-    typ = ""
-    if icao in readsb_db and isinstance(readsb_db[icao], dict):
-        typ = readsb_db[icao].get("type", "").strip().upper()
-    if not typ:
-        typ = flight.get("type", "").strip().upper()
-    return aircraft_db.get(typ, typ if typ else icao)
+  function downloadCSV() {
+    window.location.href = "/export.csv";
+  }
+  function fetchADSB() {
+    fetch("/api/adsb").then(() => refreshData());
+  }
 
-def watchdog_loop():
-    while True:
-        try:
-            import systemd.daemon
-            systemd.daemon.notify("WATCHDOG=1")
-        except: pass
-        time.sleep(60)
-
-if __name__ == '__main__':
-    logger.info(f"Starte Flugtracker auf Port {PORT}...")
-    print(f"✅ Flugtracker läuft auf Port {PORT}")
-    try:
-        aircraft_db = load_aircraft_db()
-        readsb_db = load_readsb_db()
-
-        with socketserver.ThreadingTCPServer(("", PORT), Handler) as httpd:
-            threading.Thread(target=cleanup_old_data, daemon=True).start()
-            threading.Thread(target=adsblol_loop, daemon=True).start()
-            threading.Thread(target=watchdog_loop, daemon=True).start()
-            httpd.serve_forever()
-    except Exception as e:
-        logger.critical(f"HTTP-Server abgestürzt: {e}")
+  setDefaultDates();
+  refreshData();
+  setInterval(refreshData, 10000);
+</script>
+</body>
+</html>
