@@ -64,19 +64,23 @@
       text-align: center;
       padding: 0.5rem;
     }
-    .aircraft-icon div { transform-origin: center center; font-size: 24px; }
+    .aircraft-icon div {
+      transform-origin: center center;
+      font-size: 20px;
+      transition: transform 0.5s linear;
+    }
   </style>
 </head>
 <body>
   <header>
     <div style="display: flex; align-items: center;">
       <img src="logo.png" alt="Logo" />
-      <h1>Flugtracker v1.9</h1>
+      <h1>Flugtracker v1.9e</h1>
     </div>
     <nav>
       <a href="/log">📄 Log</a>
       <a href="/stats">📊 Statistik</a>
-            <a href="/tar1090">📟 tar1090</a>
+      <a href="/tar1090">📟 tar1090</a>
       <a href="/graphs1090">📈 Graphs</a>
     </nav>
   </header>
@@ -136,11 +140,8 @@
           ]);
           pt = trkpts.iterateNext();
         }
-        console.log(`📡 Platzrunde geladen (mit Namespace): ${track.length} Punkte`);
         if (track.length) {
           L.polyline(track, { color: "orange" }).addTo(map);
-        } else {
-          console.warn("⚠️ Keine Trackpunkte gefunden.");
         }
       });
 
@@ -167,11 +168,18 @@
       currentRadius = parseInt(document.getElementById("radius").value);
       refreshData();
     }
+
+    function getSymbol(f) {
+      if (f.type === 'pattern') return '🔁';
+      if (f.velocity > 200) return '✈️';
+      if (f.baro_altitude < 3000) return '🛩️';
+      return '➤';
+    }
+
     function refreshData() {
       fetch("/flights.json")
         .then(res => res.json())
         .then(data => {
-          console.log("📦 Flugdaten geladen:", data);
           const from = document.getElementById("from").value;
           const to = document.getElementById("to").value;
           const tbody = document.getElementById("flightTable");
@@ -192,10 +200,11 @@
           aircraftMarkers = [];
           filtered.forEach(f => {
             if (f.lat && f.lon) {
+              const iconSymbol = getSymbol(f);
               const marker = L.marker([f.lat, f.lon], {
                 icon: L.divIcon({
                   className: 'aircraft-icon',
-                  html: `<div style="transform: rotate(${f.track || 0}deg)">➤</div>`
+                  html: `<div style="transform: rotate(${f.track || 0}deg)">${iconSymbol}</div>`
                 })
               }).addTo(map);
               marker.bindPopup(`${f.callsign}<br>${f.muster}<br>${f.baro_altitude} ft`);
@@ -204,12 +213,17 @@
           });
         });
     }
+
     function downloadCSV() {
       window.location.href = "/export.csv";
     }
     function fetchADSB() {
       fetch("/api/adsb").then(() => refreshData());
     }
+
+    // ⏳ Auto-Refresh alle 10 Sekunden
+    setInterval(refreshData, 10000);
+
     refreshData();
   </script>
 </body>
