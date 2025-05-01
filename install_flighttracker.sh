@@ -9,6 +9,7 @@ rm -rf ~/Landetracker
 # 🧬 Neu klonen (ersetze ggf. URL)
 git clone https://github.com/AndreasS964/Landetracker.git ~/Landetracker
 cd ~/Landetracker
+mkdir -p ~/Landetracker
 
 # 🧰 Systempakete
 sudo apt update
@@ -77,5 +78,4 @@ echo "🌍 Weboberfläche unter: http://<pi-ip>:8083 oder via Lighttpd"
 
 # 🧪 Systemprüfung
 bash ~/Landetracker/check_system.sh
-
 
