@@ -1,29 +1,50 @@
 #!/bin/bash
 
+INSTALL_DIR="/opt/flugtracker"
+DB_PATH="/var/lib/flugtracker/flights.db"
+PORT=80
+ip=$(hostname -I | awk '{print $1}')
+
 echo "🛠️ Flugtracker Systemcheck (v1.9e)"
 
-echo -n "🔍 Flighttracker-Dienst läuft: "
-systemctl is-active --quiet flighttracker && echo "✅ OK" || echo "❌ NICHT gestartet"
+# systemd-Dienst prüfen
+if systemctl is-active --quiet flugtracker; then
+  echo "🔍 Flighttracker-Dienst läuft: ✅ OK"
+else
+  echo "🔍 Flighttracker-Dienst läuft: ❌ NICHT gestartet"
+fi
 
-echo -n "📡 readsb-Dienst aktiv: "
-systemctl is-active --quiet readsb && echo "✅ OK" || echo "❌ NICHT aktiv"
+# readsb aktiv?
+if systemctl is-active --quiet readsb; then
+  echo "📡 readsb-Dienst aktiv: ✅ OK"
+else
+  echo "📡 readsb-Dienst aktiv: ❌ NICHT gefunden"
+fi
 
-echo -n "🛩️ JSON-Daten vorhanden (readsb): "
-[ -f /run/readsb/aircraft.json ] && echo "✅ OK" || echo "❌ NICHT gefunden"
+# JSON-Daten
+if curl -s http://localhost/data/aircraft.json | grep -q 'hex'; then
+  echo "🛩️ JSON-Daten vorhanden (readsb): ✅ OK"
+else
+  echo "🛩️ JSON-Daten vorhanden (readsb): ❌ FEHLEN"
+fi
 
-echo -n "📁 platzrunde.gpx vorhanden: "
-[ -f platzrunde.gpx ] && echo "✅ OK" || echo "⚠️ fehlt"
+# Platzrunde & Logo
+[ -f "$INSTALL_DIR/platzrunde.gpx" ] && echo "📁 platzrunde.gpx vorhanden: ✅ OK" || echo "📁 platzrunde.gpx vorhanden: ⚠️ fehlt"
+[ -f "$INSTALL_DIR/logo.png" ] && echo "🖼️ logo.png vorhanden: ✅ OK" || echo "🖼️ logo.png vorhanden: ⚠️ fehlt"
 
-echo -n "🖼️ logo.png vorhanden: "
-[ -f logo.png ] && echo "✅ OK" || echo "⚠️ fehlt"
+# DB
+if sudo test -f "$DB_PATH"; then
+  echo "📈 Datenbank existiert: ✅ OK"
+else
+  echo "📈 Datenbank existiert: ❌ NICHT vorhanden"
+fi
 
-echo -n "📈 Datenbank existiert: "
-[ -f flugdaten.db ] && echo "✅ OK" || echo "❌ NICHT vorhanden"
+# Port erreichbar
+if curl -s --max-time 2 http://localhost:$PORT | grep -q '<html'; then
+  echo "🌐 Webserver-Port $PORT erreichbar: ✅ OK"
+else
+  echo "🌐 Webserver-Port $PORT erreichbar: ❌ BLOCKIERT"
+fi
 
-echo -n "🌐 Webserver-Port 8083 erreichbar: "
-nc -z localhost 8083 && echo "✅ OK" || echo "❌ BLOCKIERT"
-
-IP=$(hostname -I | awk '{print $1}')
-echo "🌍 Weboberfläche: http://$IP:8083 oder via Lighttpd"
-
+echo "🌍 Weboberfläche: http://$ip (nginx-Port $PORT)"
 echo "✅ Systemprüfung abgeschlossen."
