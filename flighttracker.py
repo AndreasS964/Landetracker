@@ -175,6 +175,7 @@ def fetch_adsblol():
             logger.info(f"{count} Flugdaten gespeichert.")
         else:
             logger.warning(f"adsb.lol-Antwort: {r.status_code}")
+    except Exception as e:
         logger.error(f"Fehler bei adsb.lol-Abruf: {e}")
 
 def adsblol_loop():
