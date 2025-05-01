@@ -53,10 +53,25 @@ git clone https://github.com/AndreasS964/Landetracker.git "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 pip3 install --break-system-packages -r requirements.txt
 
-# Datenbank vorbereiten (Tracker legt DB beim ersten Start selbst an)
+# Datenbank vorbereiten (Schema wird initial erstellt, falls nicht vorhanden)
 if [ ! -f "$DB_DIR/flights.db" ]; then
-  echo "Lege leere SQLite-DB an (Tracker initialisiert sie beim Start)..."
-  touch "$DB_DIR/flights.db"
+  echo "Erstelle neue SQLite-Datenbank mit Schema..."
+  sqlite3 "$DB_DIR/flights.db" <<SQL
+CREATE TABLE IF NOT EXISTS flugdaten (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    icao TEXT,
+    rufzeichen TEXT,
+    typ TEXT,
+    lat REAL,
+    lon REAL,
+    hoehe INTEGER,
+    geschwindigkeit INTEGER,
+    richtung INTEGER,
+    squawk TEXT,
+    timestamp INTEGER,
+    quelle TEXT
+);
+SQL
   chown www-data:www-data "$DB_DIR/flights.db"
 fi
 
@@ -128,11 +143,15 @@ systemctl enable flugtracker
 systemctl start flugtracker
 
 # Optionaler System-Check nach Installation
-if [ -f "$INSTALL_DIR/scripts/check.sh" ]; then
+if [ -f "$INSTALL_DIR/check_system.sh" ]; then
   echo "Starte System-Check..."
-  bash "$INSTALL_DIR/scripts/check.sh" || echo "Check meldet Probleme – bitte prüfen!"
+  bash "$INSTALL_DIR/check_system.sh" || echo "Check meldet Probleme – bitte prüfen!"
 else
   echo "Warnung: check.sh nicht gefunden, Systemtest wird übersprungen."
+fi
+
+echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
+
 fi
 
 echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
