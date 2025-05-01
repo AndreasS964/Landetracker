@@ -48,7 +48,7 @@ chown -R www-data:www-data "$DB_DIR" "$LOG_DIR" "$WWW_DIR" "$DEBUG_LOG"
 # Tracker-Code installieren
 echo "Installing Flugtracker..."
 rm -rf "$INSTALL_DIR"
-git clone https://github.com/deinname/flugtracker.git "$INSTALL_DIR"
+git clone https://github.com/AndreasS964/Landetracker.git "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 pip3 install -r requirements.txt
 
@@ -133,3 +133,4 @@ else
 fi
 
 echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
+
