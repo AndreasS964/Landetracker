@@ -50,7 +50,7 @@ echo "Installing Flugtracker..."
 rm -rf "$INSTALL_DIR"
 git clone https://github.com/AndreasS964/Landetracker.git "$INSTALL_DIR"
 cd "$INSTALL_DIR"
-pip3 install -r requirements.txt
+pip3 install --break-system-packages -r requirements.txt
 
 # Datenbank vorbereiten (Tracker legt DB beim ersten Start selbst an)
 if [ ! -f "$DB_DIR/flights.db" ]; then
@@ -133,4 +133,3 @@ else
 fi
 
 echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
-
