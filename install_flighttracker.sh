@@ -73,4 +73,8 @@ sudo systemctl restart lighttpd
 # ✅ Abschluss
 echo "✅ Installation abgeschlossen"
 echo "📡 Starte jetzt manuell: python3 ~/Landetracker/flighttracker.py"
-echo "🌍 Weboberfläche unter: http://<pi-ip>:8083 oder über Lighttpd-Proxy erreichbar"
+echo "🌍 Weboberfläche unter: http://<pi-ip>:8083 oder via Lighttpd"
+
+# 🧪 Systemprüfung
+bash ~/Landetracker/check_system.sh
+
