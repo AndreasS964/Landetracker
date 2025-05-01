@@ -1,8 +1,9 @@
 #!/bin/bash
-echo "🛠️ Flugtracker Systemcheck (v1.8)"
+
+echo "🛠️ Flugtracker Systemcheck (v1.9e)"
 
 echo -n "🔍 Flighttracker-Dienst läuft: "
-pgrep -f flighttracker.py >/dev/null && echo "✅ OK" || echo "❌ NICHT gestartet"
+systemctl is-active --quiet flighttracker && echo "✅ OK" || echo "❌ NICHT gestartet"
 
 echo -n "📡 readsb-Dienst aktiv: "
 systemctl is-active --quiet readsb && echo "✅ OK" || echo "❌ NICHT aktiv"
@@ -19,10 +20,10 @@ echo -n "🖼️ logo.png vorhanden: "
 echo -n "📈 Datenbank existiert: "
 [ -f flugdaten.db ] && echo "✅ OK" || echo "❌ NICHT vorhanden"
 
-echo -n "🕒 DuckDNS Cronjob vorhanden: "
-crontab -l 2>/dev/null | grep -q duckdns/duck.sh && echo "✅ OK" || echo "⚠️ NICHT eingerichtet"
-
-echo -n "🌐 Port 8083 erreichbar: "
+echo -n "🌐 Webserver-Port 8083 erreichbar: "
 nc -z localhost 8083 && echo "✅ OK" || echo "❌ BLOCKIERT"
+
+IP=$(hostname -I | awk '{print $1}')
+echo "🌍 Weboberfläche: http://$IP:8083 oder via Lighttpd"
 
 echo "✅ Systemprüfung abgeschlossen."
