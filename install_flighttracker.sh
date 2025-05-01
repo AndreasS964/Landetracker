@@ -53,10 +53,9 @@ git clone https://github.com/AndreasS964/Landetracker.git "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 pip3 install --break-system-packages -r requirements.txt
 
-# Datenbank vorbereiten (Schema wird initial erstellt, falls nicht vorhanden)
-if [ ! -f "$DB_DIR/flights.db" ]; then
-  echo "Erstelle neue SQLite-Datenbank mit Schema..."
-  sqlite3 "$DB_DIR/flights.db" <<SQL
+# Datenbank vorbereiten (Schema wird immer geprüft)
+echo "Stelle sicher, dass die Datenbank existiert und korrektes Schema hat..."
+sqlite3 "$DB_DIR/flights.db" <<SQL
 CREATE TABLE IF NOT EXISTS flugdaten (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     icao TEXT,
@@ -72,7 +71,7 @@ CREATE TABLE IF NOT EXISTS flugdaten (
     quelle TEXT
 );
 SQL
-  chown www-data:www-data "$DB_DIR/flights.db"
+chown www-data:www-data "$DB_DIR/flights.db"
 fi
 
 # Web-Dateien kopieren
