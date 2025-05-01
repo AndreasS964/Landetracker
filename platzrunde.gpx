@@ -1,38 +1,12 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<gpx version="1.1" creator="GORP (V2.2.2) - GPS Online Routen Planer auf GpsWandern.de - http://www.gpswandern.de" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:topografix="http://www.topografix.com/GPX/Private/TopoGrafix/0/1" xmlns="http://www.topografix.com/GPX/1/1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
- <metadata>
-  <time>2025-04-18T15:13:06Z</time>
-  <bounds minlat="48.2643824" minlon="8.3984553" maxlat="48.3194024" maxlon="8.4735983"/>
- </metadata>
- <rte>
-  <name>Route1</name>
-  <rtept lat="48.2797569" lon="8.4276331">
-   <name>R101</name>
-  </rtept>
-  <rtept lat="48.269303" lon="8.4372462">
-   <name>R102</name>
-  </rtept>
-  <rtept lat="48.2643824" lon="8.4497301">
-   <name>R103</name>
-  </rtept>
-  <rtept lat="48.2766731" lon="8.4735983">
-   <name>R104</name>
-  </rtept>
-  <rtept lat="48.3194024" lon="8.4271073">
-   <name>R105</name>
-  </rtept>
-  <rtept lat="48.3066954" lon="8.3984553">
-   <name>R106</name>
-  </rtept>
-  <rtept lat="48.2888971" lon="8.4186258">
-   <name>R107</name>
-  </rtept>
-  <rtept lat="48.2803502" lon="8.4271235">
-   <name>R108</name>
-  </rtept>
-  <rtept lat="48.279742" lon="8.4276492">
-   <name>R109</name>
-  </rtept>
- </rte>
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="FlightTracker" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>EDTW Platzrunde (offiziell)</name><trkseg>
+    <trkpt lat="48.27946" lon="8.42827" />
+    <trkpt lat="48.29214" lon="8.41171" />
+    <trkpt lat="48.30677" lon="8.3859" />
+    <trkpt lat="48.32594" lon="8.43003" />
+    <trkpt lat="48.27824" lon="8.48086" />
+    <trkpt lat="48.26476" lon="8.44394" />
+    <trkpt lat="48.27946" lon="8.42827" />
+  </trkseg></trk>
 </gpx>
- 
