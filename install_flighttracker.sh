@@ -1,41 +1,35 @@
 #!/bin/bash
 
-echo "📦 Starte Installation für Flighttracker v1.8 (clean Pi Setup)"
+echo "📦 Installation: Flighttracker v1.9e (saubere Neuinstallation)"
 cd ~
 
-echo "🔧 Systempakete installieren..."
-sudo apt update
-sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl netcat
+# 🔥 Ordner entfernen
+rm -rf ~/Landetracker
 
-echo "🧹 RTL-Treiber blockieren..."
+# 🧬 Neu klonen (ersetze ggf. URL)
+git clone https://github.com/AndreasS964/Landetracker.git ~/Landetracker
+cd ~/Landetracker
+
+# 🧰 Systempakete
+sudo apt update
+sudo apt install -y git python3 python3-pip rtl-sdr sqlite3 curl netcat lighttpd
+
+# 🧹 RTL-Treiber blockieren
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-echo "📁 Flighttracker-Ordner vorbereiten..."
-rm -rf ~/Landetracker
-git clone https://github.com/AndreasS964/Landetracker.git
-cd Landetracker
-
-echo "🐍 Python-Abhängigkeiten installieren (systemweit)..."
+# 🐍 Python-Abhängigkeiten
 pip3 install requests --break-system-packages
 
-echo "📄 index.html aktualisieren..."
-wget -q -O index.html https://raw.githubusercontent.com/AndreasS964/Landetracker/main/index.html
+# 🛰 readsb installieren (falls nicht vorhanden)
+if ! systemctl is-active --quiet readsb; then
+  sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
+fi
 
-echo "📡 readsb installieren..."
-sudo bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
-
-echo "🛰️ DuckDNS vorbereiten..."
-mkdir -p ~/duckdns
-echo '#!/bin/bash' > ~/duckdns/duck.sh
-echo 'echo url="https://www.duckdns.org/update?domains=andreassika&token=89d793ae-f4a3-486f-ad52-7475986679af&ip=" | curl -k -o ~/duckdns/duck.log -K -' >> ~/duckdns/duck.sh
-chmod 700 ~/duckdns/duck.sh
-(crontab -l 2>/dev/null; echo "*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1") | crontab -
-
-echo "📁 Platzrunde & Logo sichern (falls vorhanden)..."
+# 🧭 Platzrunde & Logo kopieren (optional)
 cp platzrunde.gpx logo.png . 2>/dev/null || true
 
-echo "🔁 Autostart-Dienst einrichten..."
-cat <<EOF | sudo tee /etc/systemd/system/flighttracker.service
+# 🔁 Autostart-Dienst
+sudo tee /etc/systemd/system/flighttracker.service > /dev/null <<EOF
 [Unit]
 Description=Flighttracker Webserver
 After=network.target
@@ -57,11 +51,7 @@ sudo systemctl daemon-reexec
 sudo systemctl daemon-reload
 sudo systemctl enable flighttracker.service
 
-echo "✅ Installation abgeschlossen!"
-echo "👉 Starte manuell mit: python3 ~/Landetracker/flighttracker.py"
-
-echo "🌐 Lighttpd-Reverse-Proxy einrichten..."
-sudo apt install -y lighttpd
+# 🌐 Lighttpd Proxy für Portweiterleitung
 sudo lighty-enable-mod proxy
 sudo lighty-enable-mod proxy-http
 sudo tee /etc/lighttpd/conf-available/88-flighttracker.conf > /dev/null <<EOF
@@ -79,3 +69,8 @@ server.modules += ( "mod_proxy", "mod_proxy_http" )
 EOF
 sudo lighty-enable-mod 88-flighttracker
 sudo systemctl restart lighttpd
+
+# ✅ Abschluss
+echo "✅ Installation abgeschlossen"
+echo "📡 Starte jetzt manuell: python3 ~/Landetracker/flighttracker.py"
+echo "🌍 Weboberfläche unter: http://<pi-ip>:8083 oder über Lighttpd-Proxy erreichbar"
