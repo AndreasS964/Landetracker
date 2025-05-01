@@ -8,7 +8,7 @@
 
 ## 🧭 Was ist der Flugtracker?
 
-Ein autark laufendes Tracking-System für Flugbewegungen rund um Flugplätze wie EDTW. Läuft lokal auf einem Raspberry Pi mit SDR-Stick – ohne Cloud oder externe Server.
+Ein autark laufendes Tracking-System für Flugbewegungen rund um Flugplätze. Läuft lokal auf einem Raspberry Pi mit SDR-Stick – ohne Cloud oder externe Server.
 
 ---
 
