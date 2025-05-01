@@ -234,12 +234,10 @@ if __name__ == '__main__':
         readsb_db = load_readsb_db()
 
         with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        threading.Thread(target=cleanup_old_data, daemon=True).start()
-        threading.Thread(target=adsblol_loop, daemon=True).start()
-        threading.Thread(target=watchdog_loop, daemon=True).start()
             threading.Thread(target=cleanup_old_data, daemon=True).start()
-        threading.Thread(target=adsblol_loop, daemon=True).start()
-        threading.Thread(target=watchdog_loop, daemon=True).start()
-        httpd.serve_forever()
+            threading.Thread(target=adsblol_loop, daemon=True).start()
+            threading.Thread(target=watchdog_loop, daemon=True).start()
+            httpd.serve_forever()
     except Exception as e:
         logger.critical(f"HTTP-Server abgestürzt: {e}")
+
