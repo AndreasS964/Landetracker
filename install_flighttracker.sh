@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Flugtracker Installer v1.7
-# Installiert readsb, 1090tar, SQLite, Web-Frontend mit Karte und Statistik, sowie cronjob für Datenbereinigung
-# Zielplattform: Raspberry Pi mit Raspbian/Debian-basiertem System
+# install_flighttracker.sh
+# Flugtracker Installer v1.7 (aktualisiert)
+# Installiert readsb, tar1090, graphs1090, Web-Frontend, Datenbank, Autostart und Debug-Logging
 
-set -e
+set -euo pipefail
 
 # Parameter
 INSTALL_DIR="/opt/flugtracker"
@@ -21,16 +21,8 @@ apt install -y git nginx sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren (nur wenn NICHT bereits installiert)
 if [ ! -x /usr/local/bin/readsb ]; then
-  echo "Installing readsb..."
-  git clone https://github.com/wiedehopf/readsb.git /tmp/readsb
-  cd /tmp/readsb
-  make -j3
-  make install
-  mkdir -p /etc/readsb
-  cp /tmp/readsb/debian/readsb.default /etc/default/readsb || true
-  cp /tmp/readsb/debian/readsb.service /etc/systemd/system/readsb.service
-  systemctl enable readsb
-  systemctl start readsb
+  echo "Installing readsb über wiedehopf-Skript..."
+  bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
 else
   echo "readsb bereits installiert, Installation wird übersprungen."
 fi
@@ -38,10 +30,15 @@ fi
 # RTL-Treiber blockieren (falls SDR verwendet wird)
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-# tar1090 & graphs1090 installieren (optional)
+# tar1090 & graphs1090 installieren
 echo "Installiere tar1090 & graphs1090..."
 bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
 bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
+
+# Firewall freigeben (wenn ufw installiert ist)
+if command -v ufw &>/dev/null; then
+  ufw allow 80/tcp || true
+fi
 
 # Verzeichnisse anlegen
 mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
@@ -63,36 +60,7 @@ fi
 
 # Web-Dateien kopieren
 cp -r web/* "$WWW_DIR"
-
-# Neue index.html bereitstellen
-cat <<EOF > "$WWW_DIR/index.html"
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flugtracker</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <header>
-    <h1>Flugtracker</h1>
-    <p>Live-Daten, Statistiken & Platzrunde</p>
-  </header>
-  <main>
-    <div id="map"></div>
-    <section id="stats"></section>
-    <section id="filters"></section>
-    <section id="table"></section>
-  </main>
-  <footer>
-    <p>Version 1.7 – &copy; Flugtracker</p>
-  </footer>
-  <script src="leaflet.js"></script>
-  <script src="main.js"></script>
-</body>
-</html>
-EOF
+cp platzrunde.gpx logo.png "$WWW_DIR" 2>/dev/null || true
 
 # nginx konfigurieren
 cat <<EOF > /etc/nginx/sites-available/flugtracker
@@ -143,6 +111,9 @@ After=network.target
 ExecStart=/usr/local/bin/flugtracker-start
 Restart=always
 User=www-data
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
@@ -160,4 +131,4 @@ else
   echo "Warnung: check.sh nicht gefunden, Systemtest wird übersprungen."
 fi
 
-echo "Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
+echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
