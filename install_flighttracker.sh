@@ -152,6 +152,3 @@ fi
 
 echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
 
-fi
-
-echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
