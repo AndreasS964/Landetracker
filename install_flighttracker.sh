@@ -52,10 +52,11 @@ git clone https://github.com/deinname/flugtracker.git "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 pip3 install -r requirements.txt
 
-# Datenbank vorbereiten
+# Datenbank vorbereiten (Tracker legt DB beim ersten Start selbst an)
 if [ ! -f "$DB_DIR/flights.db" ]; then
-  echo "Creating initial SQLite DB..."
-  python3 scripts/init_db.py "$DB_DIR/flights.db"
+  echo "Lege leere SQLite-DB an (Tracker initialisiert sie beim Start)..."
+  touch "$DB_DIR/flights.db"
+  chown www-data:www-data "$DB_DIR/flights.db"
 fi
 
 # Web-Dateien kopieren
