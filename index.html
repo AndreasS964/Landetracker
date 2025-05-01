@@ -124,14 +124,24 @@
 
     fetch("/platzrunde.gpx")
       .then(res => res.text())
-      .then(gpx => new window.DOMParser().parseFromString(gpx, "application/xml"))
+      .then(gpx => new DOMParser().parseFromString(gpx, "application/xml"))
       .then(gpxData => {
+        const nsResolver = (prefix) => prefix === "gpx" ? "http://www.topografix.com/GPX/1/1" : null;
+        const trkpts = gpxData.evaluate("//gpx:trkpt", gpxData, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
         const track = [];
-        gpxData.querySelectorAll("trkpt").forEach(pt => {
-          track.push([parseFloat(pt.getAttribute("lat")), parseFloat(pt.getAttribute("lon"))]);
-        });
+        let pt = trkpts.iterateNext();
+        while (pt) {
+          track.push([
+            parseFloat(pt.getAttribute("lat")),
+            parseFloat(pt.getAttribute("lon"))
+          ]);
+          pt = trkpts.iterateNext();
+        }
+        console.log(`📡 Platzrunde geladen (mit Namespace): ${track.length} Punkte`);
         if (track.length) {
           L.polyline(track, { color: "orange" }).addTo(map);
+        } else {
+          console.warn("⚠️ Keine Trackpunkte gefunden.");
         }
       });
 
@@ -158,6 +168,12 @@
       currentRadius = parseInt(document.getElementById("radius").value);
       refreshData();
     }
+    function downloadCSV() {
+      window.location.href = "/export.csv";
+    }
+    function fetchADSB() {
+      fetch("/api/adsb").then(() => refreshData());
+    }
     function refreshData() {
       fetch("/flights.json")
         .then(res => res.json())
@@ -166,20 +182,24 @@
           const to = document.getElementById("to").value;
           const tbody = document.getElementById("flightTable");
           tbody.innerHTML = "";
+
           const filtered = data.filter(f => {
             const ts = new Date(f.timestamp * 1000);
             const matchDate = (!from || ts >= new Date(from)) && (!to || ts <= new Date(to + "T23:59:59"));
-            const matchRadius = !f.lat || !f.lon || !f.dist || f.dist <= currentRadius;
+            const matchRadius = typeof f.dist !== 'number' || f.dist <= currentRadius;
             const matchType = !filterType || f.typ === filterType;
             return matchDate && matchRadius && matchType;
           });
+
           filtered.forEach(f => {
             const tr = document.createElement("tr");
             tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.baro_altitude}</td><td>${f.velocity}</td><td>${new Date(f.timestamp * 1000).toLocaleString()}</td>`;
             tbody.appendChild(tr);
           });
+
           aircraftMarkers.forEach(m => map.removeLayer(m));
           aircraftMarkers = [];
+
           filtered.forEach(f => {
             if (f.lat && f.lon) {
               const marker = L.marker([f.lat, f.lon], {
@@ -194,13 +214,8 @@
           });
         });
     }
-    function downloadCSV() {
-      window.location.href = "/export.csv";
-    }
-    function fetchADSB() {
-      fetch("/api/adsb").then(() => refreshData());
-    }
     refreshData();
   </script>
 </body>
 </html>
+
