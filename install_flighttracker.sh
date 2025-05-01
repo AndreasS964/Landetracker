@@ -76,7 +76,7 @@ SQL
 fi
 
 # Web-Dateien kopieren
-cp platzrunde.gpx logo.png "$WWW_DIR" 2>/dev/null || true
+sudo cp platzrunde.gpx logo.png "$WWW_DIR" 2>/dev/null || true
 cp "$INSTALL_DIR/index.html" "$WWW_DIR/index.html" 2>/dev/null || true
 
 # nginx konfigurieren
@@ -151,4 +151,3 @@ else
 fi
 
 echo "✅ Installation abgeschlossen. Webinterface unter http://<IP-Adresse>/ erreichbar."
-
