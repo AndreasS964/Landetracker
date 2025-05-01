@@ -46,3 +46,19 @@ mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 touch "$DEBUG_LOG"
 chown -R www-data:www
 
+# Weiterleitungsseite für Port 80 erstellen
+cat <<EOF > /var/www/html/index.html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=http://localhost:8083/">
+  <title>Flugtracker Weiterleitung</title>
+</head>
+<body>
+  <p>Weiterleitung zu <a href="http://localhost:8083/">Flugtracker Weboberfläche</a>...</p>
+</body>
+</html>
+EOF
+
+
