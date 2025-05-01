@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <title>Flugtracker v1.8</title>
+  <meta charset="UTF-8">
+  <title>Flugtracker</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <style>
-    body { margin: 0; font-family: sans-serif; background: #eef2f5; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f5f7fa; }
     header {
-      background: #002b55;
+      background: #003366;
       color: white;
       padding: 1rem;
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
     }
     header img { height: 40px; margin-right: 1rem; }
     header h1 { font-size: 1.2rem; margin: 0; }
@@ -24,59 +24,54 @@
       font-weight: bold;
     }
     #filters {
-      background: #e0e0e0;
-      padding: 0.5rem;
+      background: #e7ecf3;
+      padding: 0.8rem;
       display: flex;
       flex-wrap: wrap;
-      justify-content: flex-start;
       align-items: center;
       gap: 0.5rem;
     }
-    #filters label { font-weight: bold; margin-right: 0.5rem; }
-    #filters input[type="date"], #filters input[type="number"] {
-      padding: 0.3rem;
+    #filters label { font-weight: bold; }
+    #filters input, #filters button {
+      padding: 0.4rem 0.6rem;
       border: 1px solid #ccc;
-      border-radius: 4px;
-      width: auto;
-    }
-    #filters button {
-      padding: 0.4rem 0.8rem;
-      border: none;
-      background: #1976d2;
-      color: white;
-      cursor: pointer;
       border-radius: 4px;
     }
     #main {
       display: flex;
-      height: 70vh;
+      height: 75vh;
     }
     #map { flex: 3; }
     #flights {
       flex: 2;
-      overflow-y: auto;
       background: white;
+      overflow-y: auto;
       border-left: 1px solid #ccc;
     }
-    table { width: 100%; border-collapse: collapse; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
     th, td {
       padding: 0.5rem;
-      border-bottom: 1px solid #ccc;
+      border-bottom: 1px solid #ddd;
       text-align: left;
     }
+    th { background: #f0f0f0; }
     footer {
+      background: #003366;
+      color: white;
       text-align: center;
       padding: 0.5rem;
-      background: #002b55;
-      color: white;
     }
+    .aircraft-icon div { transform-origin: center center; font-size: 24px; }
   </style>
 </head>
 <body>
   <header>
     <div style="display: flex; align-items: center;">
       <img src="logo.png" alt="Logo" />
-      <h1>Flugtracker v1.8</h1>
+      <h1>Flugtracker v1.9</h1>
     </div>
     <nav>
       <a href="/log">📄 Log</a>
@@ -88,10 +83,8 @@
   </header>
 
   <div id="filters">
-    <label for="from">Von:</label>
-    <input type="date" id="from" />
-    <label for="to">Bis:</label>
-    <input type="date" id="to" />
+    <label>Von: <input type="date" id="from"></label>
+    <label>Bis: <input type="date" id="to"></label>
     <button onclick="setDateToday()">📅 Heute</button>
     <button onclick="setDateWeek()">📆 Woche</button>
     <button onclick="clearFilters()">🧹 Alle</button>
@@ -99,12 +92,11 @@
     <button onclick="filterType='arrival'; refreshData();">🛬 Anflug</button>
     <button onclick="filterType='departure'; refreshData();">🛫 Abflug</button>
     <button onclick="filterType='pattern'; refreshData();">🔁 Platzrunde</button>
-    <label for="radius">Radius NM:</label>
-    <input type="number" id="radius" value="3" min="1" max="20" step="1" />
+    <label>Radius NM: <input type="number" id="radius" value="3" min="1" max="20"></label>
     <button onclick="applyRadius()">📍 Setzen</button>
     <button onclick="refreshData()">🔄 Aktualisieren</button>
     <button onclick="downloadCSV()">💾 CSV</button>
-    <button onclick="fetchADSB()">🌐 ADS-B.lol</button>
+    <button onclick="fetchADSB()">🔄 Daten abrufen (adsb.lol)</button>
   </div>
 
   <div id="main">
@@ -114,21 +106,18 @@
         <thead>
           <tr><th>Callsign</th><th>Typ</th><th>Alt</th><th>Speed</th><th>Zeit</th></tr>
         </thead>
-        <tbody id="flightTable"><tr><td colspan="5">⏳ Lade Flugdaten...</td></tr></tbody>
+        <tbody id="flightTable"></tbody>
       </table>
     </div>
   </div>
 
   <footer>
-    powered by Andreas Sika – v1.8
+    powered by Andreas Sika – v1.9e
   </footer>
 
   <script>
     const map = L.map('map').setView([48.2789, 8.4293], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18
-    }).addTo(map);
-
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
     let aircraftMarkers = [];
     let currentRadius = 3;
     let filterType = '';
@@ -178,33 +167,28 @@
           const tbody = document.getElementById("flightTable");
           tbody.innerHTML = "";
           const filtered = data.filter(f => {
-            const ts = new Date(f.time * 1000);
+            const ts = new Date(f.timestamp * 1000);
             const matchDate = (!from || ts >= new Date(from)) && (!to || ts <= new Date(to + "T23:59:59"));
             const matchRadius = !f.lat || !f.lon || !f.dist || f.dist <= currentRadius;
             const matchType = !filterType || f.typ === filterType;
             return matchDate && matchRadius && matchType;
           });
-
           filtered.forEach(f => {
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.alt}</td><td>${f.speed}</td><td>${new Date(f.time * 1000).toLocaleString()}</td>`;
+            tr.innerHTML = `<td>${f.callsign}</td><td>${f.muster}</td><td>${f.baro_altitude}</td><td>${f.velocity}</td><td>${new Date(f.timestamp * 1000).toLocaleString()}</td>`;
             tbody.appendChild(tr);
           });
-
           aircraftMarkers.forEach(m => map.removeLayer(m));
           aircraftMarkers = [];
-
           filtered.forEach(f => {
             if (f.lat && f.lon) {
               const marker = L.marker([f.lat, f.lon], {
                 icon: L.divIcon({
                   className: 'aircraft-icon',
-                  html: '✈️',
-                  iconSize: [24, 24],
-                  iconAnchor: [12, 12]
+                  html: `<div style="transform: rotate(${f.track || 0}deg)">➤</div>`
                 })
               }).addTo(map);
-              marker.bindPopup(`${f.callsign}<br>${f.muster}<br>${f.alt} ft`);
+              marker.bindPopup(`${f.callsign}<br>${f.muster}<br>${f.baro_altitude} ft`);
               aircraftMarkers.push(marker);
             }
           });
