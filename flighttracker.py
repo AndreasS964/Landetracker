@@ -1,4 +1,4 @@
-# flighttracker.py – vollständiger Stand mit Log & Statistik
+# flighttracker_stats_html.py – aktualisierte Version mit Chart.js-Statistikseite unter /stats
 
 import http.server
 import builtins
@@ -34,14 +34,12 @@ wh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(fh)
 logger.addHandler(wh)
 
-# Web-Log-Handler
 class WebLogHandler(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
         log_lines.append(msg)
 logger.addHandler(WebLogHandler())
 
-# --- Hilfsfunktionen ---
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -73,7 +71,6 @@ def fetch_stats():
         logger.error(f"Fehler bei Statistikabfrage: {e}")
     return {k: [dict(r) for r in v] for k, v in out.items()}
 
-# --- HTTP-Handler ---
 class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -124,6 +121,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
         elif parsed.path == "/stats":
+            try:
+                with open("stats.html", "r", encoding="utf-8") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            except Exception as e:
+                logger.error(f"Fehler beim Laden von stats.html: {e}")
+                self.send_error(500, str(e))
+        elif parsed.path == "/stats.json":
             stats = fetch_stats()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -132,7 +140,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         else:
             return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
-# --- Hintergrundprozesse ---
 def cleanup_old_data():
     while True:
         try:
@@ -193,7 +200,6 @@ def adsblol_loop():
             logger.warning(f"adsblol_loop-Fehler: {e}")
         time.sleep(300)
 
-# --- Typdatenbank laden ---
 AIRCRAFT_CSV = 'aircraft_db.csv'
 READSB_DB_PATH = "/run/readsb/aircraft.json"
 
@@ -247,3 +253,4 @@ if __name__ == '__main__':
             httpd.serve_forever()
     except Exception as e:
         logger.critical(f"HTTP-Server abgestürzt: {e}")
+
