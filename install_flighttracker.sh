@@ -1,9 +1,18 @@
 #!/bin/bash
 
-# install_flighttracker.sh
-# Flugtracker Installer v1.9 – inkl. systemd, lighttpd für tar1090 und graphs1090, ohne Reverse Proxy, Logzugriff, Requirements & aircraft_db.csv
+# install_flighttracker.sh v1.9.1
+# - sicher mit lighttpd-Konfig-Erweiterung
+# - HTML-Statusausgabe nach /flugtracker/status.html
+# - Update-kompatibel: kann bestehende Installation aktualisieren
+# - optional interaktive Benutzerabfragen
 
 set -euo pipefail
+
+# Root-Check
+if [ "$EUID" -ne 0 ]; then
+  echo "\n❌ Bitte als root ausführen."
+  exit 1
+fi
 
 # Parameter
 INSTALL_DIR="/opt/flugtracker"
@@ -11,114 +20,75 @@ DB_DIR="/var/lib/flugtracker"
 LOG_DIR="/var/log/flugtracker"
 WWW_DIR="/var/www/html/flugtracker"
 DEBUG_LOG="$LOG_DIR/debug.log"
-ENABLE_DEBUG=true
+DB_FILE="$DB_DIR/flugdaten.db"
+PY_SCRIPT="flighttracker.py"
+WEB_HTML="index.html"
 
-# Abhängigkeiten installieren
+# Interaktive Abfrage
+read -p "🛠️ Neuinstallation (n) oder Update (u)? [n/u]: " MODE
+
+if [[ "$MODE" == "n" ]]; then
+  echo "📦 Führe Neuinstallation durch..."
+  rm -rf "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+  mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+  touch "$DEBUG_LOG"
+else
+  echo "🔁 Update-Modus – vorhandene Daten bleiben erhalten."
+  mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+fi
+
+chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+
+# Abhängigkeiten
 apt update
 apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
 
-# readsb installieren (wenn nicht vorhanden)
-if [ ! -x /usr/local/bin/readsb ]; then
-  echo "Installing readsb über wiedehopf-Skript..."
-  bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
-else
-  echo "readsb bereits installiert, Übersprungen."
-fi
+# readsb installieren
+[ ! -x /usr/local/bin/readsb ] && bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
 
-# RTL-Treiber blockieren (falls SDR verwendet wird)
-echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
+# tar1090 & graphs1090
+[ ! -f "/usr/local/share/tar1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
+[ ! -f "/usr/local/share/graphs1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
 
-# tar1090 & graphs1090 installieren (nur wenn nicht vorhanden)
-if [ ! -f "/usr/local/share/tar1090/html/index.html" ]; then
-  echo "Installiere tar1090..."
-  bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
-else
-  echo "tar1090 bereits vorhanden – übersprungen."
-fi
-
-if [ ! -f "/usr/local/share/graphs1090/html/index.html" ]; then
-  echo "Installiere graphs1090..."
-  bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
-else
-  echo "graphs1090 bereits vorhanden – übersprungen."
-fi
-
-# Alte Installation bereinigen
-rm -rf "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
-
-# Verzeichnisse anlegen
-mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
-touch "$DEBUG_LOG"
-chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
-
-# Logdatei im WWW verlinken
+# Datei-Kopien
+cp ./$PY_SCRIPT "$INSTALL_DIR/" || { echo "❌ $PY_SCRIPT fehlt"; exit 1; }
+[ -f "./logo.png" ] && cp ./logo.png "$INSTALL_DIR/"
+[ -f "./platzrunde.gpx" ] && cp ./platzrunde.gpx "$INSTALL_DIR/"
+[ -f "./$WEB_HTML" ] && cp ./$WEB_HTML "$WWW_DIR/"
 ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
-# Dateien kopieren: logo.png und platzrunde.gpx
-if [ -f "./logo.png" ]; then
-  sudo cp ./logo.png "$INSTALL_DIR/"
-  echo "✅ logo.png erfolgreich kopiert."
-else
-  echo "⚠️ logo.png fehlt."
-fi
+# Python-Abhängigkeiten
+[ -f "./requirements.txt" ] && pip3 install --break-system-packages -r ./requirements.txt
 
-if [ -f "./platzrunde.gpx" ]; then
-  sudo cp ./platzrunde.gpx "$INSTALL_DIR/"
-  echo "✅ platzrunde.gpx erfolgreich kopiert."
-else
-  echo "⚠️ platzrunde.gpx fehlt."
-fi
-
-# Python-Requirements installieren
-if [ -f "./requirements.txt" ]; then
-  pip3 install --break-system-packages -r ./requirements.txt || pip3 install --break-system-packages flask pyModeS
-fi
-
-# aircraft_db.csv bereitstellen
+# aircraft_db.csv vorbereiten
 if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
   if [ -f "./aircraftDatabase.csv" ]; then
-    echo "🛠️ Konvertiere aircraftDatabase.csv → aircraft_db.csv (OpenSky-Format)..."
-    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}' ./aircraftDatabase.csv > "$INSTALL_DIR/aircraft_db.csv"
-    echo "✅ aircraft_db.csv erstellt aus aircraftDatabase.csv"
+    awk -F, 'NR==1 {for (i=1;i<=NF;i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1 && $c2 {gsub(/\'\'/,"",$c1); gsub(/\'\'/,"",$c2); print $c1 "," $c2}' ./aircraftDatabase.csv > "$INSTALL_DIR/aircraft_db.csv"
   elif [ -f "./aircraft_db.csv" ]; then
-    sudo cp ./aircraft_db.csv "$INSTALL_DIR/"
-    echo "✅ aircraft_db.csv aus lokalem Verzeichnis kopiert."
+    cp ./aircraft_db.csv "$INSTALL_DIR/"
   else
     echo "icao,model" > "$INSTALL_DIR/aircraft_db.csv"
-    echo "⚠️ aircraft_db.csv nicht gefunden – Dummy-Datei erstellt."
   fi
 fi
 
-if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
-  TYPECOUNT=$(wc -l < "$INSTALL_DIR/aircraft_db.csv")
-  echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
-fi
-
-# SQLite-Datenbank erstellen, wenn sie fehlt
-if [ ! -f "$INSTALL_DIR/flugdaten.db" ]; then
-  echo "🛠️ Erstelle SQLite-Datenbank flugdaten.db..."
-  sqlite3 "$INSTALL_DIR/flugdaten.db" <<EOF
-  CREATE TABLE flugdaten (
-    icao24 TEXT,
-    typecode TEXT,
-    latitude REAL,
-    longitude REAL,
-    altitude REAL,
-    speed REAL,
-    track REAL
-  );
+# Datenbank anlegen (nur bei Neuinstallation)
+if [[ "$MODE" == "n" && ! -f "$DB_FILE" ]]; then
+  sqlite3 "$DB_FILE" <<EOF
+CREATE TABLE IF NOT EXISTS flugdaten (
+  hex TEXT, callsign TEXT, baro_altitude REAL, velocity REAL,
+  timestamp INTEGER, muster TEXT, lat REAL, lon REAL
+);
 EOF
-  echo "✅ flugdaten.db und Tabelle flugdaten erstellt."
 fi
 
-# systemd-Dienst für Flugtracker einrichten
+# systemd-Dienst
 cat > /etc/systemd/system/flugtracker.service <<EOF
 [Unit]
 Description=Flugtracker Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 $INSTALL_DIR/flighttracker.py
+ExecStart=/usr/bin/python3 $INSTALL_DIR/$PY_SCRIPT
 WorkingDirectory=$INSTALL_DIR
 Restart=always
 User=www-data
@@ -130,30 +100,25 @@ EOF
 systemctl daemon-reexec
 systemctl enable --now flugtracker.service
 
-# lighttpd für tar1090 und graphs1090 konfigurieren
-echo "Konfiguriere lighttpd für tar1090 und graphs1090..."
-cat > /etc/lighttpd/lighttpd.conf <<EOF
-server.modules += ( "mod_proxy" )
-server.document-root = "/usr/local/share/tar1090/html"
-EOF
+# lighttpd-Konfig sicher einbinden
+echo 'server.modules += ("mod_alias")
+alias.url += ("/flugtracker/" => "'$WWW_DIR'/")' > /etc/lighttpd/conf-available/99-flugtracker.conf
+lighttpd-enable-mod 99-flugtracker || true
+systemctl restart lighttpd
 
-# lighttpd neu starten
-sudo systemctl restart lighttpd
+# Firewall
+ufw allow 8083 || true
+ufw reload || true
 
-# Firewall konfigurieren
-sudo ufw allow 8083
-sudo ufw reload
+# HTML-Statusseite generieren
+STATUS_FILE="$WWW_DIR/status.html"
+echo "<html><body><h2>🛠️ Installation erfolgreich</h2><ul>" > "$STATUS_FILE"
+echo "<li>Installationsmodus: $MODE</li>" >> "$STATUS_FILE"
+echo "<li>Version: 1.9.1</li>" >> "$STATUS_FILE"
+echo "<li>Webinterface: <a href='/flugtracker/'>/flugtracker/</a></li>" >> "$STATUS_FILE"
+echo "<li>Dienststatus: \$(systemctl is-active flugtracker)</li>" >> "$STATUS_FILE"
+echo "</ul></body></html>" >> "$STATUS_FILE"
 
-echo "✅ Flugtracker läuft nun direkt auf Port 8083."
-echo "✅ lighttpd bedient jetzt tar1090 und graphs1090."
-echo "Zugriff auf tar1090 unter http://<raspi-ip>/tar1090 möglich."
-echo "Zugriff auf graphs1090 unter http://<raspi-ip>/graphs1090 möglich."
-echo "✅ Installation abgeschlossen. Führe Systemprüfung durch..."
-
-# Starte Systemcheck
-if [ -f "check_system.sh" ]; then
-  chmod +x check_system.sh
-  ./check_system.sh
-else
-  echo "⚠️ check_system.sh nicht gefunden. Manuell ausführen, wenn gewünscht."
-fi
+echo "✅ Flugtracker fertig unter http://<IP>:8083"
+echo "✅ Webinterface unter http://<IP>/flugtracker/"
+echo "📄 Statusseite: http://<IP>/flugtracker/status.html"
