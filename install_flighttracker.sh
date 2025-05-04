@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # install_flighttracker.sh
-# Flugtracker Installer v1.9 – inkl. systemd, ohne Reverse Proxy (lighttpd/nginx entfernt), Logzugriff, Requirements & aircraft_db.csv
+# Flugtracker Installer v1.9 – inkl. systemd, lighttpd für tar1090 und graphs1090, ohne Reverse Proxy, Logzugriff, Requirements & aircraft_db.csv
 
 set -euo pipefail
 
@@ -16,7 +16,7 @@ ENABLE_DEBUG=true
 # Abhängigkeiten installieren
 apt update
 apt remove -y lighttpd nginx || true
-apt install -y git sqlite3 python3 python3-pip curl unzip
+apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren (wenn nicht vorhanden)
 if [ ! -x /usr/local/bin/readsb ]; then
@@ -60,89 +60,4 @@ if [ -f "./logo.png" ]; then
   sudo cp ./logo.png "$INSTALL_DIR/"
   echo "✅ logo.png erfolgreich kopiert."
 else
-  echo "⚠️ logo.png fehlt."
-fi
-
-if [ -f "./platzrunde.gpx" ]; then
-  sudo cp ./platzrunde.gpx "$INSTALL_DIR/"
-  echo "✅ platzrunde.gpx erfolgreich kopiert."
-else
-  echo "⚠️ platzrunde.gpx fehlt."
-fi
-
-# Python-Requirements installieren
-if [ -f "./requirements.txt" ]; then
-  pip3 install --break-system-packages -r ./requirements.txt || pip3 install --break-system-packages flask pyModeS
-fi
-
-# aircraft_db.csv bereitstellen
-if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
-  if [ -f "./aircraftDatabase.csv" ]; then
-    echo "🛠️ Konvertiere aircraftDatabase.csv → aircraft_db.csv (OpenSky-Format)..."
-    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}' ./aircraftDatabase.csv > "$INSTALL_DIR/aircraft_db.csv"
-    echo "✅ aircraft_db.csv erstellt aus aircraftDatabase.csv"
-  elif [ -f "./aircraft_db.csv" ]; then
-    sudo cp ./aircraft_db.csv "$INSTALL_DIR/"
-    echo "✅ aircraft_db.csv aus lokalem Verzeichnis kopiert."
-  else
-    echo "icao,model" > "$INSTALL_DIR/aircraft_db.csv"
-    echo "⚠️ aircraft_db.csv nicht gefunden – Dummy-Datei erstellt."
-  fi
-fi
-
-if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
-  TYPECOUNT=$(wc -l < "$INSTALL_DIR/aircraft_db.csv")
-  echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
-fi
-
-# SQLite-Datenbank erstellen, wenn sie fehlt
-if [ ! -f "$INSTALL_DIR/flugdaten.db" ]; then
-  echo "🛠️ Erstelle SQLite-Datenbank flugdaten.db..."
-  sqlite3 "$INSTALL_DIR/flugdaten.db" <<EOF
-  CREATE TABLE flugdaten (
-    icao24 TEXT,
-    typecode TEXT,
-    latitude REAL,
-    longitude REAL,
-    altitude REAL,
-    speed REAL,
-    track REAL
-  );
-EOF
-  echo "✅ flugdaten.db und Tabelle flugdaten erstellt."
-fi
-
-# systemd-Dienst für Flugtracker einrichten
-cat > /etc/systemd/system/flugtracker.service <<EOF
-[Unit]
-Description=Flugtracker Service
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python3 $INSTALL_DIR/flighttracker.py
-WorkingDirectory=$INSTALL_DIR
-Restart=always
-User=www-data
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reexec
-systemctl enable --now flugtracker.service
-
-# Firewall konfigurieren
-sudo ufw allow 8083
-sudo ufw reload
-
-echo "✅ Flugtracker läuft nun direkt auf Port 8083."
-echo "Zugriff via http://<raspi-ip>:8083 möglich."
-echo "✅ Installation abgeschlossen. Führe Systemprüfung durch..."
-
-# Starte Systemcheck
-if [ -f "check_system.sh" ]; then
-  chmod +x check_system.sh
-  ./check_system.sh
-else
-  echo "⚠️ check_system.sh nicht gefunden. Manuell ausführen, wenn gewünscht."
-fi
+  echo "
