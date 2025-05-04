@@ -17,6 +17,7 @@ fi
 set -euo pipefail
 
 # Parameter
+VERSION="1.9.1"
 INSTALL_DIR="/opt/flugtracker"
 DB_DIR="/var/lib/flugtracker"
 LOG_DIR="/var/log/flugtracker"
@@ -74,7 +75,7 @@ touch "$DEBUG_LOG"
 chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 
 # Abhängigkeiten
-apt update && apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip dialog git lighttpd sqlite3 python3 python3-pip curl unzip
+apt update && apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip dialog || { echo "❌ Paketinstallation fehlgeschlagen"; exit 1; }
 
 # readsb installieren
 if [[ "$MODE" != "c" || "${INSTALL_READSB:-}" =~ ^[Yy]$ ]]; then
@@ -98,7 +99,11 @@ ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
 # Python-Abhängigkeiten
 if [[ "$MODE" != "c" || "${INSTALL_PY:-}" =~ ^[Yy]$ ]]; then
-  [ -f "./requirements.txt" ] && pip3 install --break-system-packages -r ./requirements.txt
+  [ -f "./requirements.txt" ] && if pip3 install --help | grep -q break-system-packages; then
+    pip3 install --break-system-packages -r ./requirements.txt
+  else
+    pip3 install -r ./requirements.txt
+  fi
 fi
 
 # aircraft_db.csv vorbereiten
@@ -161,7 +166,7 @@ fi
 STATUS_FILE="$WWW_DIR/status.html"
 echo "<html><body><h2>🛠️ Installation erfolgreich</h2><ul>" > "$STATUS_FILE"
 echo "<li>Installationsmodus: $MODE</li>" >> "$STATUS_FILE"
-echo "<li>Version: 1.9.1</li>" >> "$STATUS_FILE"
+echo "<li>Version: $VERSION</li>" >> "$STATUS_FILE"
 echo "<li>Webinterface: <a href='/flugtracker/'>/flugtracker/</a></li>" >> "$STATUS_FILE"
 echo "<li>Dienststatus: $(systemctl is-active flugtracker)</li>" >> "$STATUS_FILE"
 echo "</ul></body></html>" >> "$STATUS_FILE"
@@ -171,5 +176,3 @@ echo "✅ Webinterface unter http://<IP>/flugtracker/"
 echo "📄 Statusseite: http://<IP>/flugtracker/status.html"
 
 read -p "Drücke Enter zum Beenden..."
-
-
