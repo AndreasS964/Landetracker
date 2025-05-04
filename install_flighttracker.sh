@@ -29,9 +29,20 @@ fi
 # RTL-Treiber blockieren (falls SDR verwendet wird)
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-# tar1090 & graphs1090 installieren
-echo "Installiere tar1090 & graphs1090..."
-bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
+# tar1090 & graphs1090 installieren (nur falls nicht vorhanden)
+if [ ! -f "/usr/local/share/tar1090/html/index.html" ]; then
+  echo "Installiere tar1090..."
+  bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
+else
+  echo "tar1090 bereits vorhanden – übersprungen."
+fi
+
+if [ ! -f "/usr/local/share/graphs1090/html/index.html" ]; then
+  echo "Installiere graphs1090..."
+  bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
+else
+  echo "graphs1090 bereits vorhanden – übersprungen."
+fi"
 bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
 
 # Alte Installation bereinigen
@@ -47,7 +58,7 @@ ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
 # Python-Requirements installieren
 if [ -f "./requirements.txt" ]; then
-  pip3 install -r ./requirements.txt || pip3 install flask pyModeS
+  pip3 install --break-system-packages -r ./requirements.txt || pip3 install --break-system-packages flask pyModeS
 fi
 
 # aircraft_db.csv bereitstellen
