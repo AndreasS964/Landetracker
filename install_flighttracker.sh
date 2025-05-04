@@ -29,7 +29,7 @@ fi
 # RTL-Treiber blockieren (falls SDR verwendet wird)
 echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/rtl-sdr-blacklist.conf
 
-# tar1090 & graphs1090 installieren (nur falls nicht vorhanden)
+# tar1090 & graphs1090 installieren (nur wenn nicht vorhanden)
 if [ ! -f "/usr/local/share/tar1090/html/index.html" ]; then
   echo "Installiere tar1090..."
   bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
@@ -42,8 +42,7 @@ if [ ! -f "/usr/local/share/graphs1090/html/index.html" ]; then
   bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
 else
   echo "graphs1090 bereits vorhanden – übersprungen."
-fi"
-bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
+fi
 
 # Alte Installation bereinigen
 rm -rf "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
