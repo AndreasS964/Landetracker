@@ -47,7 +47,6 @@ if [[ -z "${MODE:-}" ]]; then
   echo "❌ Kein Installationsmodus gewählt – Abbruch."
   exit 1
 fi
-fi
 
 # Custom-Auswahl
 if [[ "$MODE" == "c" ]]; then
@@ -75,7 +74,7 @@ touch "$DEBUG_LOG"
 chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 
 # Abhängigkeiten
-apt update && apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
+apt update && apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip dialog git lighttpd sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren
 if [[ "$MODE" != "c" || "${INSTALL_READSB:-}" =~ ^[Yy]$ ]]; then
@@ -172,4 +171,5 @@ echo "✅ Webinterface unter http://<IP>/flugtracker/"
 echo "📄 Statusseite: http://<IP>/flugtracker/status.html"
 
 read -p "Drücke Enter zum Beenden..."
+
 
