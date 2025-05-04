@@ -1,18 +1,6 @@
 #!/bin/bash
 
-# install_flighttracker.sh v1.9.1
-# - sicher mit lighttpd-Konfig-Erweiterung
-# - HTML-Statusausgabe nach /flugtracker/status.html
-# - Update-kompatibel: kann bestehende Installation aktualisieren
-# - optional interaktive Benutzerabfragen
-
 set -euo pipefail
-
-# Root-Check
-if [ "$EUID" -ne 0 ]; then
-  echo "\n❌ Bitte als root ausführen."
-  exit 1
-fi
 
 # Parameter
 INSTALL_DIR="/opt/flugtracker"
@@ -24,41 +12,75 @@ DB_FILE="$DB_DIR/flugdaten.db"
 PY_SCRIPT="flighttracker.py"
 WEB_HTML="index.html"
 
-# Interaktive Abfrage
-read -p "🛠️ Neuinstallation (n) oder Update (u)? [n/u]: " MODE
+# dialog prüfen
+if ! command -v dialog &> /dev/null; then
+  apt install -y dialog
+fi
 
+# Installationsmodus auswählen
+MODE=$(dialog --clear --stdout --title "Installationsmodus" \
+  --menu "Wähle den Modus:" 15 50 3 \
+  n "Neuinstallation (löscht alles)" \
+  u "Update (Daten bleiben erhalten)" \
+  c "Custom (Komponenten wählen)")
+
+if [[ -z "${MODE:-}" ]]; then
+  echo "❌ Kein Installationsmodus gewählt – Abbruch."
+  exit 1
+fi
+
+# Custom-Auswahl
+if [[ "$MODE" == "c" ]]; then
+  CHOICES=$(dialog --checklist "Komponenten auswählen" 20 60 10 \
+    1 "readsb installieren" on \
+    2 "tar1090/graphs1090 installieren" on \
+    3 "lighttpd konfigurieren" on \
+    4 "Python-Abhängigkeiten" on \
+    5 "flighttracker.py kopieren" on \
+    --stdout)
+  [[ "$CHOICES" =~ 1 ]] && INSTALL_READSB="y"
+  [[ "$CHOICES" =~ 2 ]] && INSTALL_TAR="y"
+  [[ "$CHOICES" =~ 3 ]] && CONFIG_LIGHTTPD="y"
+  [[ "$CHOICES" =~ 4 ]] && INSTALL_PY="y"
+  [[ "$CHOICES" =~ 5 ]] && COPY_PY="y"
+fi
+
+# Verzeichnisse vorbereiten
 if [[ "$MODE" == "n" ]]; then
   echo "📦 Führe Neuinstallation durch..."
   rm -rf "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
-  mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
-  touch "$DEBUG_LOG"
-else
-  echo "🔁 Update-Modus – vorhandene Daten bleiben erhalten."
-  mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 fi
-
+mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+touch "$DEBUG_LOG"
 chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 
 # Abhängigkeiten
-apt update
-apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
+apt update && apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren
-[ ! -x /usr/local/bin/readsb ] && bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
+if [[ "$MODE" != "c" || "${INSTALL_READSB:-}" =~ ^[Yy]$ ]]; then
+  [ ! -x /usr/local/bin/readsb ] && bash -c "$(wget -O - https://github.com/wiedehopf/adsb-scripts/raw/master/readsb-install.sh)"
+fi
 
 # tar1090 & graphs1090
-[ ! -f "/usr/local/share/tar1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
-[ ! -f "/usr/local/share/graphs1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
+if [[ "$MODE" != "c" || "${INSTALL_TAR:-}" =~ ^[Yy]$ ]]; then
+  [ ! -f "/usr/local/share/tar1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
+  [ ! -f "/usr/local/share/graphs1090/html/index.html" ] && bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
+fi
 
 # Datei-Kopien
-cp ./$PY_SCRIPT "$INSTALL_DIR/" || { echo "❌ $PY_SCRIPT fehlt"; exit 1; }
+if [[ "$MODE" != "c" || "${COPY_PY:-}" =~ ^[Yy]$ ]]; then
+  cp ./$PY_SCRIPT "$INSTALL_DIR/" || { echo "❌ $PY_SCRIPT fehlt"; exit 1; }
+fi
 [ -f "./logo.png" ] && cp ./logo.png "$INSTALL_DIR/"
 [ -f "./platzrunde.gpx" ] && cp ./platzrunde.gpx "$INSTALL_DIR/"
 [ -f "./$WEB_HTML" ] && cp ./$WEB_HTML "$WWW_DIR/"
 ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
 # Python-Abhängigkeiten
-[ -f "./requirements.txt" ] && pip3 install --break-system-packages -r ./requirements.txt
+if [[ "$MODE" != "c" || "${INSTALL_PY:-}" =~ ^[Yy]$ ]]; then
+  [ -f "./requirements.txt" ] && pip3 install --break-system-packages -r ./requirements.txt
+fi
 
 # aircraft_db.csv vorbereiten
 if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
@@ -101,14 +123,20 @@ systemctl daemon-reexec
 systemctl enable --now flugtracker.service
 
 # lighttpd-Konfig sicher einbinden
-echo 'server.modules += ("mod_alias")
+if [[ "$MODE" != "c" || "${CONFIG_LIGHTTPD:-}" =~ ^[Yy]$ ]]; then
+  echo 'server.modules += ("mod_alias")
 alias.url += ("/flugtracker/" => "'$WWW_DIR'/")' > /etc/lighttpd/conf-available/99-flugtracker.conf
-lighttpd-enable-mod 99-flugtracker || true
-systemctl restart lighttpd
+  lighttpd-enable-mod 99-flugtracker || true
+  systemctl restart lighttpd
+fi
 
 # Firewall
-ufw allow 8083 || true
-ufw reload || true
+if command -v ufw &> /dev/null; then
+  ufw allow 8083 || true
+  ufw reload || true
+else
+  echo "⚠️ ufw nicht installiert – Firewall-Regel übersprungen."
+fi
 
 # HTML-Statusseite generieren
 STATUS_FILE="$WWW_DIR/status.html"
@@ -116,9 +144,11 @@ echo "<html><body><h2>🛠️ Installation erfolgreich</h2><ul>" > "$STATUS_FILE
 echo "<li>Installationsmodus: $MODE</li>" >> "$STATUS_FILE"
 echo "<li>Version: 1.9.1</li>" >> "$STATUS_FILE"
 echo "<li>Webinterface: <a href='/flugtracker/'>/flugtracker/</a></li>" >> "$STATUS_FILE"
-echo "<li>Dienststatus: \$(systemctl is-active flugtracker)</li>" >> "$STATUS_FILE"
+echo "<li>Dienststatus: $(systemctl is-active flugtracker)</li>" >> "$STATUS_FILE"
 echo "</ul></body></html>" >> "$STATUS_FILE"
 
 echo "✅ Flugtracker fertig unter http://<IP>:8083"
 echo "✅ Webinterface unter http://<IP>/flugtracker/"
 echo "📄 Statusseite: http://<IP>/flugtracker/status.html"
+
+read -p "Drücke Enter zum Beenden..."
