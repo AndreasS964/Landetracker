@@ -34,6 +34,9 @@ echo "Installiere tar1090 & graphs1090..."
 bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/tar1090/master/install.sh)"
 bash -c "$(wget -q -O - https://raw.githubusercontent.com/wiedehopf/graphs1090/master/install.sh)"
 
+# Alte Installation bereinigen
+rm -rf "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
+
 # Verzeichnisse anlegen
 mkdir -p "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 touch "$DEBUG_LOG"
@@ -51,8 +54,7 @@ fi
 if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
   if [ -f "./aircraftDatabase.csv" ]; then
     echo "🛠️ Konvertiere aircraftDatabase.csv → aircraft_db.csv (OpenSky-Format)..."
-    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i}
-             NR>1 && $c1!="" && $c2!="" {gsub(/'''/,"",$c1); gsub(/'''/,"",$c2); print $c1","$c2}' ./aircraftDatabase.csv \
+    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}'; print $c1 "," $c2}' ./aircraftDatabase.csv \
       > "$INSTALL_DIR/aircraft_db.csv"
     echo "✅ aircraft_db.csv erstellt aus aircraftDatabase.csv"
   elif [ -f "./aircraft_db.csv" ]; then
@@ -108,4 +110,12 @@ nginx -t && systemctl reload nginx
 
 echo "🌐 nginx leitet jetzt Anfragen von Port 80 ➔ Port 8083 weiter."
 echo "Zugriff via http://<raspi-ip> oder DuckDNS-Adresse möglich."
-echo "✅ Installation abgeschlossen. Jetzt bitte flighttracker.py über systemd starten oder manuell testen."
+echo "✅ Installation abgeschlossen. Führe Systemprüfung durch..."
+
+# Starte Systemcheck
+if [ -f "check_system.sh" ]; then
+  chmod +x check_system.sh
+  ./check_system.sh
+else
+  echo "⚠️ check_system.sh nicht gefunden. Manuell ausführen, wenn gewünscht."
+fi
