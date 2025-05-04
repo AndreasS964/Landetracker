@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Hinweis bei Start über sudo ohne TTY
+if [ -z "$(tty)" ] || [ ! -t 0 ]; then
+  echo "❌ Dieses Skript muss in einem interaktiven Terminal ausgeführt werden."
+  echo "🔧 Lösung: Starte es z. B. mit: sudo -i && ./install_flighttracker.sh"
+  exit 1
+fi
+
 set -euo pipefail
 
 # Parameter
