@@ -1,6 +1,13 @@
 #!/bin/bash
 
 # Hinweis bei Start über sudo ohne TTY
+export TERM=${TERM:-xterm}  # Setze TERM für dialog-Nutzung
+
+# Arbeitsverzeichnis prüfen
+if [[ ! -f "./install_flighttracker.sh" || ! -f "./flighttracker.py" ]]; then
+  echo "❌ Bitte aus dem Landetracker-Verzeichnis aufrufen (z. B. /home/pi/Landetracker)"
+  exit 1
+fi
 if [ -z "$(tty)" ] || [ ! -t 0 ]; then
   echo "❌ Dieses Skript muss in einem interaktiven Terminal ausgeführt werden."
   echo "🔧 Lösung: Starte es z. B. mit: sudo -i && ./install_flighttracker.sh"
