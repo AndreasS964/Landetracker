@@ -46,16 +46,15 @@ chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
 # Python-Requirements installieren
-if [ -f "$INSTALL_DIR/requirements.txt" ]; then
-  pip3 install -r "$INSTALL_DIR/requirements.txt" || pip3 install flask pyModeS
+if [ -f "./requirements.txt" ]; then
+  pip3 install -r ./requirements.txt || pip3 install flask pyModeS
 fi
 
 # aircraft_db.csv bereitstellen
 if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
   if [ -f "./aircraftDatabase.csv" ]; then
     echo "🛠️ Konvertiere aircraftDatabase.csv → aircraft_db.csv (OpenSky-Format)..."
-    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}'; print $c1 "," $c2}' ./aircraftDatabase.csv \
-      > "$INSTALL_DIR/aircraft_db.csv"
+    awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}' ./aircraftDatabase.csv > "$INSTALL_DIR/aircraft_db.csv"
     echo "✅ aircraft_db.csv erstellt aus aircraftDatabase.csv"
   elif [ -f "./aircraft_db.csv" ]; then
     cp ./aircraft_db.csv "$INSTALL_DIR/"
@@ -64,11 +63,12 @@ if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
     echo "icao,model" > "$INSTALL_DIR/aircraft_db.csv"
     echo "⚠️ aircraft_db.csv nicht gefunden – Dummy-Datei erstellt."
   fi
-  fi
-  if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
-    TYPECOUNT=$(wc -l < "$INSTALL_DIR/aircraft_db.csv")
-    echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
-  fi
+fi
+
+if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
+  TYPECOUNT=$(wc -l < "$INSTALL_DIR/aircraft_db.csv")
+  echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
+fi
 
 # systemd-Dienst für Flugtracker einrichten
 cat > /etc/systemd/system/flugtracker.service <<EOF
