@@ -80,6 +80,21 @@ if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
   echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
 fi
 
+# DNS für DuckDNS konfigurieren (falls verwendet)
+if [ -f "./duckdns_config.txt" ]; then
+  echo "🌐 DuckDNS Domain & Token gefunden – Einrichtung..."
+  DOMAIN=$(awk '{print $1}' ./duckdns_config.txt)
+  TOKEN=$(awk '{print $2}' ./duckdns_config.txt)
+
+  # DuckDNS Setup
+  echo "DUCKDNS_DOMAIN=$DOMAIN" | sudo tee -a /etc/environment
+  echo "DUCKDNS_TOKEN=$TOKEN" | sudo tee -a /etc/environment
+  sudo systemctl restart networking
+  echo "✅ DuckDNS erfolgreich eingerichtet"
+else
+  echo "⚠️ DuckDNS-Konfigurationsdatei nicht gefunden. Bitte 'duckdns_config.txt' hinzufügen."
+fi
+
 # systemd-Dienst für Flugtracker einrichten
 cat > /etc/systemd/system/flugtracker.service <<EOF
 [Unit]
@@ -129,3 +144,4 @@ if [ -f "check_system.sh" ]; then
 else
   echo "⚠️ check_system.sh nicht gefunden. Manuell ausführen, wenn gewünscht."
 fi
+
