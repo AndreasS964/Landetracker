@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # install_flighttracker.sh
-# Flugtracker Installer v1.9 – inkl. systemd, nginx Reverse Proxy auf Port 8083, Logzugriff, Requirements & aircraft_db.csv
+# Flugtracker Installer v1.9 – inkl. systemd, lighttpd Reverse Proxy auf Port 8083, Logzugriff, Requirements & aircraft_db.csv
 
 set -euo pipefail
 
@@ -16,7 +16,7 @@ ENABLE_DEBUG=true
 # Abhängigkeiten installieren
 apt update
 apt remove -y lighttpd || true
-apt install -y git nginx sqlite3 python3 python3-pip curl unzip
+apt install -y git lighttpd sqlite3 python3 python3-pip curl unzip
 
 # readsb installieren (wenn nicht vorhanden)
 if [ ! -x /usr/local/bin/readsb ]; then
@@ -131,27 +131,22 @@ EOF
 systemctl daemon-reexec
 systemctl enable --now flugtracker.service
 
-# nginx als Reverse Proxy für Port 8083 konfigurieren
-echo "Konfiguriere nginx als Reverse Proxy für Port 8083..."
-cat > /etc/nginx/sites-available/flugtracker <<EOF
-server {
-    listen 80 default_server;
-    server_name _;
-
-    location / {
-        proxy_pass http://localhost:8083;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-}
+# lighttpd als Reverse Proxy für Port 8083 konfigurieren
+echo "Konfiguriere lighttpd als Reverse Proxy für Port 8083..."
+cat > /etc/lighttpd/lighttpd.conf <<EOF
+server.modules += ( "mod_proxy" )
+proxy.server = ( "/" => ( "localhost" => ( "host" => "127.0.0.1", "port" => 8083 ) ) )
 EOF
 
-rm -f /etc/nginx/sites-enabled/*
-ln -s /etc/nginx/sites-available/flugtracker /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
+# lighttpd neu starten
+sudo systemctl restart lighttpd
 
-echo "🌐 nginx leitet jetzt Anfragen von Port 80 ➔ Port 8083 weiter."
-echo "Zugriff via http://<raspi-ip> oder DuckDNS-Adresse möglich."
+# Firewall konfigurieren
+sudo ufw allow 80
+sudo ufw reload
+
+echo "🌐 lighttpd leitet jetzt Anfragen von Port 80 ➔ Port 8083 weiter."
+echo "Zugriff via http://<raspi-ip> möglich."
 echo "✅ Installation abgeschlossen. Führe Systemprüfung durch..."
 
 # Starte Systemcheck
