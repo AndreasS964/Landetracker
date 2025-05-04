@@ -55,6 +55,21 @@ chown -R www-data:www-data "$INSTALL_DIR" "$DB_DIR" "$LOG_DIR" "$WWW_DIR"
 # Logdatei im WWW verlinken
 ln -sf "$DEBUG_LOG" "$WWW_DIR/tracker.log"
 
+# Dateien kopieren: logo.png und platzrunde.gpx
+if [ -f "./logo.png" ]; then
+  sudo cp ./logo.png "$INSTALL_DIR/"
+  echo "✅ logo.png erfolgreich kopiert."
+else
+  echo "⚠️ logo.png fehlt."
+fi
+
+if [ -f "./platzrunde.gpx" ]; then
+  sudo cp ./platzrunde.gpx "$INSTALL_DIR/"
+  echo "✅ platzrunde.gpx erfolgreich kopiert."
+else
+  echo "⚠️ platzrunde.gpx fehlt."
+fi
+
 # Python-Requirements installieren
 if [ -f "./requirements.txt" ]; then
   pip3 install --break-system-packages -r ./requirements.txt || pip3 install --break-system-packages flask pyModeS
@@ -67,7 +82,7 @@ if [ ! -f "$INSTALL_DIR/aircraft_db.csv" ]; then
     awk -F, 'NR==1 {for (i=1; i<=NF; i++) if ($i ~ /icao24/) c1=i; else if ($i ~ /typecode/) c2=i} NR>1 && $c1!="" && $c2!="" {gsub(/'\''/,"",$c1); gsub(/'\''/,"",$c2); print $c1 "," $c2}' ./aircraftDatabase.csv > "$INSTALL_DIR/aircraft_db.csv"
     echo "✅ aircraft_db.csv erstellt aus aircraftDatabase.csv"
   elif [ -f "./aircraft_db.csv" ]; then
-    cp ./aircraft_db.csv "$INSTALL_DIR/"
+    sudo cp ./aircraft_db.csv "$INSTALL_DIR/"
     echo "✅ aircraft_db.csv aus lokalem Verzeichnis kopiert."
   else
     echo "icao,model" > "$INSTALL_DIR/aircraft_db.csv"
@@ -80,19 +95,21 @@ if [ -f "$INSTALL_DIR/aircraft_db.csv" ]; then
   echo "📦 aircraft_db.csv geladen – $((TYPECOUNT - 1)) Einträge gefunden."
 fi
 
-# DNS für DuckDNS konfigurieren (falls verwendet)
-if [ -f "./duckdns_config.txt" ]; then
-  echo "🌐 DuckDNS Domain & Token gefunden – Einrichtung..."
-  DOMAIN=$(awk '{print $1}' ./duckdns_config.txt)
-  TOKEN=$(awk '{print $2}' ./duckdns_config.txt)
-
-  # DuckDNS Setup
-  echo "DUCKDNS_DOMAIN=$DOMAIN" | sudo tee -a /etc/environment
-  echo "DUCKDNS_TOKEN=$TOKEN" | sudo tee -a /etc/environment
-  sudo systemctl restart networking
-  echo "✅ DuckDNS erfolgreich eingerichtet"
-else
-  echo "⚠️ DuckDNS-Konfigurationsdatei nicht gefunden. Bitte 'duckdns_config.txt' hinzufügen."
+# SQLite-Datenbank erstellen, wenn sie fehlt
+if [ ! -f "$INSTALL_DIR/flugdaten.db" ]; then
+  echo "🛠️ Erstelle SQLite-Datenbank flugdaten.db..."
+  sqlite3 "$INSTALL_DIR/flugdaten.db" <<EOF
+  CREATE TABLE flugdaten (
+    icao24 TEXT,
+    typecode TEXT,
+    latitude REAL,
+    longitude REAL,
+    altitude REAL,
+    speed REAL,
+    track REAL
+  );
+EOF
+  echo "✅ flugdaten.db und Tabelle flugdaten erstellt."
 fi
 
 # systemd-Dienst für Flugtracker einrichten
@@ -144,4 +161,3 @@ if [ -f "check_system.sh" ]; then
 else
   echo "⚠️ check_system.sh nicht gefunden. Manuell ausführen, wenn gewünscht."
 fi
-
