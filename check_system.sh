@@ -1,11 +1,11 @@
 #!/bin/bash
 
 INSTALL_DIR="/opt/flugtracker"
-DB_PATH="/var/lib/flugtracker/flights.db"
-PORT=80
+DB_PATH="/var/lib/flugtracker/flugdaten.db"
+PORT=8083
 ip=$(hostname -I | awk '{print $1}')
 
-echo "🛠️ Flugtracker Systemcheck (v1.9e)"
+echo "\n🛠️ Flugtracker Systemcheck (v1.9e)"
 
 # systemd-Dienst prüfen
 if systemctl is-active --quiet flugtracker; then
@@ -21,7 +21,7 @@ else
   echo "📡 readsb-Dienst aktiv: ❌ NICHT gefunden"
 fi
 
-# JSON-Daten
+# JSON-Daten prüfen (readsb)
 if curl -s http://localhost/data/aircraft.json | grep -q 'hex'; then
   echo "🛩️ JSON-Daten vorhanden (readsb): ✅ OK"
 else
@@ -32,19 +32,30 @@ fi
 [ -f "$INSTALL_DIR/platzrunde.gpx" ] && echo "📁 platzrunde.gpx vorhanden: ✅ OK" || echo "📁 platzrunde.gpx vorhanden: ⚠️ fehlt"
 [ -f "$INSTALL_DIR/logo.png" ] && echo "🖼️ logo.png vorhanden: ✅ OK" || echo "🖼️ logo.png vorhanden: ⚠️ fehlt"
 
-# DB
-if sudo test -f "$DB_PATH"; then
+# aircraft_db.csv
+[ -f "$INSTALL_DIR/aircraft_db.csv" ] && echo "📦 aircraft_db.csv vorhanden: ✅ OK" || echo "📦 aircraft_db.csv vorhanden: ⚠️ fehlt"
+
+# Datenbank vorhanden?
+if [ -f "$DB_PATH" ]; then
   echo "📈 Datenbank existiert: ✅ OK"
 else
   echo "📈 Datenbank existiert: ❌ NICHT vorhanden"
 fi
 
-# Port erreichbar
+# Port erreichbar?
 if curl -s --max-time 2 http://localhost:$PORT | grep -q '<html'; then
   echo "🌐 Webserver-Port $PORT erreichbar: ✅ OK"
 else
   echo "🌐 Webserver-Port $PORT erreichbar: ❌ BLOCKIERT"
 fi
 
-echo "🌍 Weboberfläche: http://$ip (nginx-Port $PORT)"
+# Offener Port über ss
+if ss -tuln | grep -q ":$PORT"; then
+  echo "🔌 Port $PORT offen (ss): ✅ OK"
+else
+  echo "🔌 Port $PORT offen (ss): ❌ NEIN"
+fi
+
+# IP-Anzeige
+echo "🌍 Weboberfläche erreichbar unter: http://$ip (via nginx auf Port 80 ➔ $PORT)"
 echo "✅ Systemprüfung abgeschlossen."
