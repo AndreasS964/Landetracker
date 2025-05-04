@@ -32,15 +32,21 @@ if ! command -v dialog &> /dev/null; then
 fi
 
 # Installationsmodus auswählen
-MODE=$(dialog --clear --stdout --title "Installationsmodus" \
-  --menu "Wähle den Modus:" 15 50 3 \
-  n "Neuinstallation (löscht alles)" \
-  u "Update (Daten bleiben erhalten)" \
-  c "Custom (Komponenten wählen)")
+if command -v dialog &>/dev/null; then
+  MODE=$(dialog --clear --stdout --title "Installationsmodus" \
+    --menu "Wähle den Modus:" 15 50 3 \
+    n "Neuinstallation (löscht alles)" \
+    u "Update (Daten bleiben erhalten)" \
+    c "Custom (Komponenten wählen)")
+else
+  echo "⚠️ dialog nicht verfügbar – Textmodus aktiviert"
+  read -rp "Installationsmodus wählen (n/u/c): " MODE
+fi
 
 if [[ -z "${MODE:-}" ]]; then
   echo "❌ Kein Installationsmodus gewählt – Abbruch."
   exit 1
+fi
 fi
 
 # Custom-Auswahl
@@ -166,3 +172,4 @@ echo "✅ Webinterface unter http://<IP>/flugtracker/"
 echo "📄 Statusseite: http://<IP>/flugtracker/status.html"
 
 read -p "Drücke Enter zum Beenden..."
+
